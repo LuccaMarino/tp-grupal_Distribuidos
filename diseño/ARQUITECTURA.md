@@ -72,13 +72,17 @@ Aquí mostramos cómo se comporta el sistema mientras corre: qué pasa y en qué
 
 Como los datos de un cliente se reparten entre varias réplicas, hay que saber cuándo se terminaron todos. Lo mostramos con el `Word sum`, que recibe del `Parser` y envía al `Word aggregator`. Cuando un `Parser` termina, publica el mensaje de fin (EOF) en el exchange una vez por cada réplica de `Word sum`, por lo que cada réplica lo recibe por su propia cola, detrás de sus datos. Cada réplica registra qué `Parser` terminó y, cuando ya terminaron todos, envía sus conteos parciales y un EOF a cada `Word aggregator`. El resto de los controles con réplicas siguen el mismo esquema, cambiando el mecanismo de envío según la tabla de la sección 7.1.
 
-### 5.2 Diagrama de secuencia: Q3 y Q4
+### 5.2 Diagrama de secuencia general
+
+![Secuencia general](diagramas/secuencia_gral.png)
+
+### 5.3 Diagrama de secuencia: Q3 y Q4
 
 ![Secuencia de Q3 y Q4](diagramas/secuenciaQ3%26Q4.png)
 
 El cliente envía los artículos al Gateway. Los mensajes pasan por `Parser`, `Word sum`, `Word aggregator` y `Word joiner`. En cada paso, el EOF viaja detrás de los datos. El resultado vuelve al Gateway con el `client_id` y de ahí al cliente.
 
-### 5.3 Diagrama de secuencia: Q5
+### 5.4 Diagrama de secuencia: Q5
 
 ![Secuencia de Q5](diagramas/secuenciaQ5.png)
 
