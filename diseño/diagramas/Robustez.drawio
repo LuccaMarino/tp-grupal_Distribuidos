@@ -1,6 +1,6 @@
 <mxfile host="app.diagrams.net">
   <diagram name="Page-1" id="IBGLEvTgK0Ro9kiDe4cw">
-    <mxGraphModel dx="1625" dy="1214" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+    <mxGraphModel dx="1978" dy="1478" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -491,7 +491,7 @@
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="PuCoCFByAzrpg78oInVk-112" parent="1" style="shape=umlBoundary;whiteSpace=wrap;html=1;" value="Gateway" vertex="1">
+        <mxCell id="PuCoCFByAzrpg78oInVk-112" parent="1" style="shape=umlBoundary;whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;" value="Gateway" vertex="1">
           <mxGeometry height="80" width="100" x="640" y="280" as="geometry" />
         </mxCell>
         <mxCell id="PuCoCFByAzrpg78oInVk-113" parent="1" style="ellipse;whiteSpace=wrap;html=1;shapeInside=1;aspect=fixed;fillColor=#b0e3e6;strokeColor=#0e8088;" value="" vertex="1">
