@@ -25,10 +25,11 @@ El sistema analiza artículos de Wikipedia (en inglés y en francés) que un cli
 
 
 
-## 2. Arquitectura de software
+## 2. Arquitectura de alto nivel
 
 El sistema es un pipeline: los datos entran por un único punto (Gateway), pasan por una cadena de controles conectados por colas y los resultados vuelven por el mismo punto. Cada mensaje lleva el `client_id` del cliente que lo originó de forma que varios clientes pueden usar el sistema a la vez y los controles saben en todo momento a quien corresponde cada dato y resultado, para poder devolver las consultas al cliente correcto.
 
+![diagrama de arquitectura de alto nivel](diagramas/arquiAN.png)
 
 ## 3. Objetivos y restricciones
 
@@ -117,7 +118,7 @@ Muestra los controles, las colas entre ellos y el camino de cada consulta.
 | **Image downloader** | Descarga las imágenes de Wikimedia (Q2) | varias | Ninguno |
 | **Word sum** | Cuenta las palabras de cada abstract (Q3, Q4) y envía los largos de abstract (Q5) | varias | Ninguno |
 | **Word aggregator** | Suma los conteos de palabras de todos los word sum | varias | se almacenan en la memoria RAM los conteos de palabras y registros de EOF |
-| **Word joiner** | Une los resultados parciales y arma Q3 y Q4 | 1 | Se mantienen en RAM las sumas parciales de los aggregators hasta obtener el resultado final (TODO:para hablar)|
+| **Word joiner** | Une los resultados parciales y arma Q3 y Q4 | 1 | Se mantienen en un storage las sumas parciales de los aggregators hasta obtener todos los conteos parciales de los aggregator |
 | **Word counter** | Suma los largos de los abstracts viejos, para el promedio de Q5 | varias |se almacenan en la memoria RAM la suma de los largos de abstracts y registros de EOF |
 | **Q5 joiner** | Calcula el promedio y decide qué artículos nuevos cumplen Q5 | 1 | Se mantienen en RAM las sumas parciales de los largos y se almacena la informacion de los articulos a ser filtrados una vexz obtenido el promedio|
 
