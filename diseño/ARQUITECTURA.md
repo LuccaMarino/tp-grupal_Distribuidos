@@ -49,13 +49,19 @@ El sistema es un pipeline: los datos entran por un único punto (Gateway), pasan
 
 Funcionalidad del sistema: mostramos cómo se transforman los datos hasta llegar a cada resultado. Nos enfocamos en las consultas Q3, Q4 y Q5, que son más complejas, mientras que Q1 y Q2 son filtros simples hechos en el `Parser` y el `image downloader`. Utilizamos diagramas DAG para esto:
 
-### 4.1 DAG de Q3 y Q4 (palabras)
+### 4.1 DAG de Q1 y Q2 (imagen y url)
+
+![DAG de Q1 y Q2](diagramas/DAG_Q1y2.png)
+
+Se extrae la fecha, url y url de imagen de cada articulo para responder las querys Q1 (articulos anteriores a 2021) y Q2 (articulos anteriores a 2021 e idioma del articulo debe ser ingles).
+
+### 4.2 DAG de Q3 y Q4 (palabras)
 
 ![DAG de Q3 y Q4](diagramas/DAG_Q3y4.png)
 
 El abstract de cada artículo se limpia (se sacan las stopwords) y se cuentan sus palabras por idioma. Esos conteos parciales se suman entre todos los artículos y se obtienen las 20 palabras más usadas (Q4) y las palabras que aparecen en inglés y en francés (Q3).
 
-### 4.2 DAG de Q5 (largo de abstract)
+### 4.3 DAG de Q5 (largo de abstract)
 
 ![DAG de Q5](diagramas/DAG_Q5.png)
 
@@ -75,19 +81,6 @@ Como los datos de un cliente se reparten entre varias réplicas, hay que saber c
 ### 5.2 Diagrama de secuencia general
 
 ![Secuencia general](diagramas/secuencia_gral.png)
-
-### 5.3 Diagrama de secuencia: Q3 y Q4
-
-![Secuencia de Q3 y Q4](diagramas/secuenciaQ3%26Q4.png)
-
-El cliente envía los artículos al Gateway. Los mensajes pasan por `Parser`, `Word sum`, `Word aggregator` y `Word joiner`. En cada paso, el EOF viaja detrás de los datos. El resultado vuelve al Gateway con el `client_id` y de ahí al cliente.
-
-### 5.4 Diagrama de secuencia: Q5
-
-![Secuencia de Q5](diagramas/secuenciaQ5.png)
-
-El `Word sum` manda los largos de los artículos nuevos directo al `Q5 joiner`, y los de los viejos al `Word counter`, que los suma. Cuando el `Q5 joiner` recibe los parciales de todos los `Word counter`, calcula el promedio y devuelve solo los artículos que lo superan.
-
 
 ## 6. Vista de desarrollo
 
