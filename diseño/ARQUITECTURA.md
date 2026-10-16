@@ -2,7 +2,7 @@
 **Sistemas Distribuidos I (75.74) – TP Grupal, Diseño**
 
 **Grupo 21**:
-Integrantes: Santiago Corrado, Lucca Marino, Facundo Bravo
+Integrantes: Santiago Corrado, Lucca Marino
 
 Este documento sigue el modelo 4+1 Views. Describe el sistema desde distintos puntos de vista.
 
@@ -21,7 +21,7 @@ Este documento sigue el modelo 4+1 Views. Describe el sistema desde distintos pu
 
 ## 1. Alcance
 
-El sistema analiza artículos de Wikipedia (en inglés y en francés) que un cliente le envía, y le devuelve el resultado de 5 consultas. El procesamiento se reparte entre varios programas (controles) que trabajan en paralelo y se comunican por colas y exchanges de mensajes.
+El sistema analiza artículos de Wikipedia (en inglés y en francés) que un cliente le envía, y le devuelve el resultado de 5 consultas. El procesamiento se reparte entre varios procesos (controles) que trabajan en paralelo y se comunican con un MOM.
 
 
 
@@ -42,12 +42,12 @@ El sistema es un pipeline: los datos entran por un único punto (Gateway), pasan
 - No se permiten **sleep** para sincronizar o **spin locks** para poolear.
 - Al menos la mitad de los tipos de control deben poder replicarse.
 - El sistema se despliega con `docker-compose`.
-- Al recibir `SIGTERM`, cada proceso debe cerrar ordenadamente.
+- Cierre ordenado de cada proceso cuando se le indica que debe terminar.
 
 
 ## 4. Vista lógica
 
-Funcionalidad del sistema: mostramos cómo se transforman los datos hasta llegar a cada resultado. Nos enfocamos en las consultas Q3, Q4 y Q5, que son más complejas, mientras que Q1 y Q2 son filtros simples hechos en el `Parser` y el `image downloader`. Utilizamos diagramas DAG para esto:
+Funcionalidad del sistema: mostramos cómo se transforman los datos hasta llegar a cada resultado. Utilizamos diagramas DAG para esto:
 
 ### 4.1 DAG de Q1 y Q2 (imagen y url)
 
@@ -55,13 +55,13 @@ Funcionalidad del sistema: mostramos cómo se transforman los datos hasta llegar
 
 Se extrae la fecha, url y url de imagen de cada articulo para responder las querys Q1 (articulos anteriores a 2021) y Q2 (articulos anteriores a 2021 e idioma del articulo debe ser ingles).
 
-### 4.2 DAG de Q3 y Q4 (palabras)
+### 4.2 Conteo de palabras por idioma (Q3 y Q4)
 
 ![DAG de Q3 y Q4](diagramas/DAG_Q3y4.png)
 
 El abstract de cada artículo se limpia (se sacan las stopwords) y se cuentan sus palabras por idioma. Esos conteos parciales se suman entre todos los artículos y se obtienen las 20 palabras más usadas (Q4) y las palabras que aparecen en inglés y en francés (Q3).
 
-### 4.3 DAG de Q5 (largo de abstract)
+### 4.3 Cálculo del promedio y filtrado por largo de abstract (Q5)
 
 ![DAG de Q5](diagramas/DAG_Q5.png)
 
@@ -72,21 +72,23 @@ Los artículos anteriores a 2021 se usan para calcular el promedio global del la
 
 Aquí mostramos cómo se comporta el sistema mientras corre: qué pasa y en qué orden.
 
-### 5.1 Diagrama de actividades: cierre de un cliente
+### 5.1 Detección del fin de los datos de un cliente
 
 ![Diagrama de actividades](diagramas/actividades.png)
 
-Como los datos de un cliente se reparten entre varias réplicas, hay que saber cuándo se terminaron todos. Lo mostramos con el `Word sum`, que recibe del `Parser` y envía al `Word aggregator`. Cuando un `Parser` termina, publica el mensaje de fin (EOF) en el exchange una vez por cada réplica de `Word sum`, por lo que cada réplica lo recibe por su propia cola, detrás de sus datos. Cada réplica registra qué `Parser` terminó y, cuando ya terminaron todos, envía sus conteos parciales y un EOF a cada `Word aggregator`. El resto de los controles con réplicas siguen el mismo esquema, cambiando el mecanismo de envío según la tabla de la sección 7.1.
+Como los datos de un cliente se reparten entre varias réplicas, hay que saber cuándo se terminaron todos. Lo mostramos con el `Word aggregator`, que es stateful: recibe los conteos de los `Word sum` y envía al `Word joiner`. El `Word sum`, al ser stateless, no espera a que terminen los `Parser`: envía los conteos de cada lote apenas los calcula y, cada vez que le llega el mensaje de fin (EOF) de un `Parser`, lo reenvía a cada réplica de `Word aggregator`. Cada réplica lo recibe por su propia cola, detrás de los datos, y registra los EOF que llegaron para ese cliente. Cuando llegaron todos (uno por cada par `Parser`–`Word sum`), envía su top 20 parcial y un EOF al `Word joiner`, y libera el estado de ese cliente. El resto de los controles stateful siguen el mismo esquema, cambiando el mecanismo de envío según la tabla de la sección 7.1.
 
-### 5.2 Diagrama de secuencia general
+### 5.2 Interacción entre el cliente y el sistema
 
 ![Secuencia general](diagramas/secuencia_gral.png)
+
+El diagrama cómo se comunica un cliente con el sistema y en qué momento recibe cada resultado. Al conectarse, el `Gateway` le asigna un `client_id`, que acompaña a todos sus mensajes dentro del sistema. El cliente envía los artículos en lotes y el `Gateway` los reenvía al sistema. Mientras el cliente sigue enviando, ya pueden volver resultados de Q1 y Q2, porque se resuelven artículo por artículo. Cuando el cliente termina, envía un EOF, que el `Gateway` propaga al sistema. Después de eso se completan los resultados de Q1 y Q2, y llegan los de Q3, Q4 y Q5, que necesitan todos los datos para calcularse. Cuando llegaron las 5 consultas, el `Gateway` le avisa al cliente que terminó.
 
 ## 6. Vista de desarrollo
 
 En esta vista mostramos cómo se organiza le código.
 
-### 6.1 Diagrama de paquetes 
+### 6.1 Organización del código en módulos 
 ![Diagrama de paquetes](diagramas/paquetes.png)
 
 - **`client` y `gateway`** son las dos aplicaciones de entrada y salida.
@@ -95,12 +97,11 @@ En esta vista mostramos cómo se organiza le código.
 - **`message_protocol`** define el formato de los mensajes: `external` (entre cliente y gateway) e `internal` (entre controles).
 
 
-
 ## 7. Vista física
 
 Esta vista describe las conexiones físicas entre los componentes y qué corre dónde.
 
-### 7.1 Diagrama de robustez
+### 7.1 Controles del sistema y sus conexiones
 
 ![Diagrama de robustez](diagramas/robustez.png)
 
@@ -117,7 +118,7 @@ Muestra los controles, las colas entre ellos y el camino de cada consulta.
 | **Word aggregator** | Suma los conteos de palabras de todos los word sum | varias | se almacenan en la memoria RAM los conteos de palabras y registros de EOF |
 | **Word joiner** | Une los resultados parciales y arma Q3 y Q4 | 1 | Se mantienen en un storage las sumas parciales de los aggregators hasta obtener todos los conteos parciales de los aggregator |
 | **Word counter** | Suma los largos de los abstracts viejos, para el promedio de Q5 | varias |se almacenan en la memoria RAM la suma de los largos de abstracts y registros de EOF |
-| **Q5 joiner** | Calcula el promedio y decide qué artículos nuevos cumplen Q5 | 1 | Se mantienen en RAM las sumas parciales de los largos y se almacena la informacion de los articulos a ser filtrados una vexz obtenido el promedio|
+| **Q5 joiner** | Calcula el promedio y decide qué artículos nuevos cumplen Q5 | 1 | Se mantienen en RAM las sumas parciales de los largos y se almacena la informacion de los articulos a ser filtrados una vez obtenido el promedio|
 
 ### Comunicación entre controles
 
@@ -136,7 +137,7 @@ Muestra los controles, las colas entre ellos y el camino de cada consulta.
 | Word_counter | Q5Joiner | Cola compartida de RabbitMQ, a la que publican los emisores y desde la que consume el receptor. |
 | Worker | Gateway | Cola compartida de RabbitMQ, a la que publican los emisores y desde la que consume el receptor. |
 
-### 7.2 Diagrama de despliegue
+### 7.2 Distribución de los procesos en nodos
 
 ![Diagrama de despliegue](diagramas/despliegue.png)
 (xN: cantidad de réplicas, configurable en docker-compose)

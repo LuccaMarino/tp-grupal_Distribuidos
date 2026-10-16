@@ -48,10 +48,28 @@
         </mxCell>
 
         <mxCell id="p_ctl" value="controls" style="shape=folder;fontStyle=1;tabWidth=80;tabHeight=24;tabPosition=left;html=1;whiteSpace=wrap;align=left;spacingLeft=6;verticalAlign=top;spacingTop=3;" vertex="1" parent="1">
-          <mxGeometry x="700" y="320" width="300" height="200" as="geometry" />
+          <mxGeometry x="700" y="320" width="530" height="285" as="geometry" />
         </mxCell>
-        <mxCell id="k_ctl" value="&lt;u&gt;&lt;b&gt;Controles&lt;/b&gt;&lt;/u&gt;&lt;hr size=&quot;1&quot;&gt;Parser · ImageDownloader&lt;br&gt;WordSum · WordAggregator&lt;br&gt;WordJoiner · WordCounter&lt;br&gt;Q5Joiner" style="html=1;whiteSpace=wrap;align=center;" vertex="1" parent="p_ctl">
-          <mxGeometry x="20" y="50" width="260" height="130" as="geometry" />
+        <mxCell id="k_c0" value="&lt;u&gt;&lt;b&gt;Parser&lt;/b&gt;&lt;/u&gt;&lt;hr size=&quot;1&quot;&gt;" style="html=1;whiteSpace=wrap;align=center;" vertex="1" parent="p_ctl">
+          <mxGeometry x="20" y="50" width="150" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="k_c1" value="&lt;u&gt;&lt;b&gt;ImageDownloader&lt;/b&gt;&lt;/u&gt;&lt;hr size=&quot;1&quot;&gt;" style="html=1;whiteSpace=wrap;align=center;" vertex="1" parent="p_ctl">
+          <mxGeometry x="190" y="50" width="150" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="k_c2" value="&lt;u&gt;&lt;b&gt;WordSum&lt;/b&gt;&lt;/u&gt;&lt;hr size=&quot;1&quot;&gt;" style="html=1;whiteSpace=wrap;align=center;" vertex="1" parent="p_ctl">
+          <mxGeometry x="360" y="50" width="150" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="k_c3" value="&lt;u&gt;&lt;b&gt;WordAggregator&lt;/b&gt;&lt;/u&gt;&lt;hr size=&quot;1&quot;&gt;" style="html=1;whiteSpace=wrap;align=center;" vertex="1" parent="p_ctl">
+          <mxGeometry x="20" y="125" width="150" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="k_c4" value="&lt;u&gt;&lt;b&gt;WordCounter&lt;/b&gt;&lt;/u&gt;&lt;hr size=&quot;1&quot;&gt;" style="html=1;whiteSpace=wrap;align=center;" vertex="1" parent="p_ctl">
+          <mxGeometry x="190" y="125" width="150" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="k_c5" value="&lt;u&gt;&lt;b&gt;WordJoiner&lt;/b&gt;&lt;/u&gt;&lt;hr size=&quot;1&quot;&gt;" style="html=1;whiteSpace=wrap;align=center;" vertex="1" parent="p_ctl">
+          <mxGeometry x="360" y="125" width="150" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="k_c6" value="&lt;u&gt;&lt;b&gt;Q5Joiner&lt;/b&gt;&lt;/u&gt;&lt;hr size=&quot;1&quot;&gt;" style="html=1;whiteSpace=wrap;align=center;" vertex="1" parent="p_ctl">
+          <mxGeometry x="20" y="200" width="150" height="60" as="geometry" />
         </mxCell>
 
 
@@ -67,8 +85,8 @@
         </mxCell>
 
         <!-- Dependencias -->
-        <mxCell id="d1" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;dashed=1;exitX=0.5;exitY=1;entryX=0.1;entryY=0;" edge="1" parent="1" source="p_client" target="p_mp"><mxGeometry relative="1" as="geometry" /></mxCell>
-        <mxCell id="d2" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;dashed=1;exitX=0.5;exitY=1;entryX=0.85;entryY=0;" edge="1" parent="1" source="p_gw" target="p_mp"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="d1" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;dashed=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="p_client" target="k_ext"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="d2" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;dashed=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="p_gw" target="k_int"><mxGeometry relative="1" as="geometry" /></mxCell>
         <mxCell id="d3" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;dashed=1;exitX=0.5;exitY=1;entryX=1;entryY=0.5;" edge="1" parent="1" source="p_ctl" target="p_mp"><mxGeometry relative="1" as="geometry" /></mxCell>
         <mxCell id="d4" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;dashed=1;exitX=0.5;exitY=0;entryX=0.27;entryY=1;" edge="1" parent="1" source="p_gw" target="p_mw"><mxGeometry relative="1" as="geometry" /></mxCell>
         <mxCell id="d5" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;dashed=1;exitX=0.5;exitY=0;entryX=0.91;entryY=1;" edge="1" parent="1" source="p_ctl" target="p_mw"><mxGeometry relative="1" as="geometry" /></mxCell>
