@@ -49,7 +49,7 @@ El sistema es un pipeline: los datos entran por un único punto (Gateway), pasan
 
 Funcionalidad del sistema: mostramos cómo se transforman los datos hasta llegar a cada resultado. Utilizamos diagramas DAG para esto:
 
-### 4.1 DAG de Q1 y Q2 (imagen y url)
+### 4.1 Envio de imagen y url (Q1 y Q2)
 
 ![DAG de Q1 y Q2](diagramas/DAG_Q1y2.png)
 
