@@ -2,14 +2,14 @@
 **Sistemas Distribuidos I (75.74) – TP Grupal, Diseño**
 
 **Grupo 21**:
-Integrantes: Santiago Corrado, Lucca Marino
+Integrantes: Santiago Tomas Corrado, Lucca Emiliano Marino, Pedro Tomas Ciliberto
 
 Este documento sigue el modelo 4+1 Views. Describe el sistema desde distintos puntos de vista.
 
 ## Índice
 
 1. [Alcance](#1-alcance)
-2. [Arquitectura de software](#2-arquitectura-de-software)
+2. [Arquitectura de alto nivel](#2-arquitectura-de-alto-nivel)
 3. [Objetivos y restricciones](#3-objetivos-y-restricciones)
 4. [Vista lógica](#4-vista-lógica)
 5. [Vista de procesos](#5-vista-de-procesos)
@@ -156,10 +156,8 @@ Cómo escala el sistema:
 
 ## 9. Tareas y división entre integrantes
 
-La división busca que cada integrante tenga un área propia, con pocas dependencias entre sí.
-
-| Integrante | Área | Paquetes |
-|---|---|---|
-| Facundo | Comunicación y entrada/salida | `middleware`, `message_protocol`, `gateway`, `client` |
-| Santiago | Parser, imágenes y Q5 | `Parser`, `Image downloader`, `Word counter`, `Q5 joiner` |
-| Lucca | Palabras y validación | `Word sum`, `Word aggregator`, `Word joiner`, automatizar comparación con la ejecución serial, `docker-compose` |
+| Integrante | Paquetes |
+|---|---|
+| Pedro | `docker-compose`, `message_protocol`, `gateway`, `client` |
+| Santiago | `Parser`, `Image downloader`, `Word counter`, `Q5 joiner` |
+| Lucca | `Word sum`, `Word aggregator`, `Word joiner`, automatizar comparación con la ejecución serial, `middleware` |
