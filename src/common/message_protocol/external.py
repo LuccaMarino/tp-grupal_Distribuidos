@@ -32,6 +32,7 @@ def _recv_wiki_article(socket) -> dict:
     lang = external_serializer.deserialize_string(socket, _recv_sized)
     url = external_serializer.deserialize_string(socket, _recv_sized)
     sections = external_serializer.deserialize_string(socket, _recv_sized)
+    image = external_serializer.deserialize_string(socket, _recv_sized)
     date_modified_bytes = _recv_sized(socket, external_serializer.UINT64_SIZE)
     date_modified = external_serializer.deserialize_uint64(date_modified_bytes)
 
@@ -41,6 +42,7 @@ def _recv_wiki_article(socket) -> dict:
         "lang": lang,
         "url": url,
         "sections": sections,
+        "image": image,
         "date_modified": date_modified,
     }
 
@@ -76,17 +78,17 @@ def _serialize_wiki_article(article: dict) -> bytes:
     """
     Serialize a WIKI_ARTICLE message into a bytes object.
     """
-    name = article.get("name") or article.get("title") or ""
+    name = article.get("name") or ""
     abstract = article.get("abstract") or ""
-
-    in_lang = article.get("in_language")
-    if isinstance(in_lang, dict):
-        lang = in_lang.get("identifier", "")
-    else:
-        lang = article.get("lang") or ""
-
+    lang = article.get("in_language").get("identifier", "")
     url = article.get("url") or ""
     sections = article.get("sections") or ""
+
+    raw_image = article.get("image")
+    if isinstance(raw_image, dict):
+        image = str(raw_image.get("content_url") or "")
+    else:
+        image = ""
 
     raw_date = article.get("date_modified")
     if isinstance(raw_date, datetime):
@@ -102,6 +104,7 @@ def _serialize_wiki_article(article: dict) -> bytes:
         external_serializer.serialize_string(lang),
         external_serializer.serialize_string(url),
         external_serializer.serialize_string(sections),
+        external_serializer.serialize_string(image),
         external_serializer.serialize_uint64(date_modified),
     ])
 

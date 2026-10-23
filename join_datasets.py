@@ -26,6 +26,8 @@ def process_and_merge_single_client(client_id: int):
 
         dataset_path = kagglehub.dataset_download(KAGGLE_DATASET_BASE_PATH, path=kaggle_file_path)
         df = pd.read_parquet(dataset_path)
+
+        # Drop unnecessary columns before handling them to client (ask if this is permitted)
         df = df.drop(columns=COLUMNS_TO_DROP, errors='ignore')
 
         dataframes.append(df)
