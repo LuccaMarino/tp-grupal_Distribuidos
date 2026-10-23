@@ -9,16 +9,23 @@ SERVER_HOST = os.environ["SERVER_HOST"]
 SERVER_PORT = int(os.environ["SERVER_PORT"])
 
 def handle_client_request(client_socket):
+    # Define output queue to use for sending articles to next node via MOM
+    # ...
+
     try:
         while True:
             msg_type, data = message_protocol.external.recv_msg(client_socket)
             if msg_type == message_protocol.external.MsgType.WIKI_ARTICLE:
+                # Serialize and send the article to the next node via MOM
+                # ...
                 message_protocol.external.send_msg(
                     client_socket,
                     message_protocol.external.MsgType.ACK
                 )
             elif msg_type == message_protocol.external.MsgType.END_OF_RECORDS:
                 print("Received end of records signal.")
+                # Send EOF to next node via MOM
+                # ...
                 message_protocol.external.send_msg(
                     client_socket,
                     message_protocol.external.MsgType.ACK
