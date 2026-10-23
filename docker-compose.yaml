@@ -1,26 +1,67 @@
-services:
-  client_0:
-    build:
-      context: ./src/
-      dockerfile: client/Dockerfile
-    container_name: client_0
-    environment:
-    - PYTHONUNBUFFERED=1
-    - SERVER_HOST=gateway
-    - SERVER_PORT=5678
-    - INPUT_FILE=/datasets/client_0.parquet
-    - OUTPUT_FILE=/output/client_0_output.parquet
-    - RETRY_COUNT=5
-    - DELAY_BETWEEN_RETRIES=1
-    volumes:
+x-client-env: &client-env
+  PYTHONUNBUFFERED: "1"
+  SERVER_HOST: "gateway"
+  SERVER_PORT: "5678"
+  RETRY_COUNT: "5"
+  DELAY_BETWEEN_RETRIES: "1"
+
+x-client-base: &client-base
+  build:
+    context: ./src/
+    dockerfile: client/Dockerfile
+  volumes:
     - ./datasets:/datasets
     - ./output:/output
+  depends_on:
+    - gateway
+
+services:
   gateway:
     build:
       context: ./src/
       dockerfile: gateway/Dockerfile
     container_name: gateway
     environment:
-    - PYTHONUNBUFFERED=1
-    - SERVER_HOST=gateway
-    - SERVER_PORT=5678
+      PYTHONUNBUFFERED: "1"
+      SERVER_HOST: "gateway"
+      SERVER_PORT: "5678"
+
+  client_0:
+    <<: *client-base
+    container_name: client_0
+    environment:
+      <<: *client-env
+      INPUT_FILE: "/datasets/client_0.parquet"
+      OUTPUT_FILE: "/output/client_0_output.parquet"
+
+  # client_1:
+  #   <<: *client-base
+  #   container_name: client_1
+  #   environment:
+  #     <<: *client-env
+  #     INPUT_FILE: "/datasets/client_1.parquet"
+  #     OUTPUT_FILE: "/output/client_1_output.parquet"
+
+  # client_2:
+  #   <<: *client-base
+  #   container_name: client_2
+  #   environment:
+  #     <<: *client-env
+  #     INPUT_FILE: "/datasets/client_2.parquet"
+  #     OUTPUT_FILE: "/output/client_2_output.parquet"
+
+  # client_3:
+  #   <<: *client-base
+  #   container_name: client_3
+  #   environment:
+  #     <<: *client-env
+  #     INPUT_FILE: "/datasets/client_3.parquet"
+  #     OUTPUT_FILE: "/output/client_3_output.parquet"
+
+  # client_4:
+  #   <<: *client-base
+  #   container_name: client_4
+  #   environment:
+  #     <<: *client-env
+  #     INPUT_FILE: "/datasets/client_4.parquet"
+  #     OUTPUT_FILE: "/output/client_4_output.parquet"
