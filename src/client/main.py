@@ -1,10 +1,15 @@
+import pyarrow.parquet as pq
 import os
 import signal
 import socket
 import time
 
+from common import message_protocol
+
 SERVER_HOST = os.environ["SERVER_HOST"]
 SERVER_PORT = int(os.environ["SERVER_PORT"])
+INPUT_FILE = os.environ["INPUT_FILE"]
+OUTPUT_FILE = os.environ["OUTPUT_FILE"]
 RETRY_COUNT = int(os.environ["RETRY_COUNT"])
 DELAY_BETWEEN_RETRIES = int(os.environ["DELAY_BETWEEN_RETRIES"])
 
@@ -39,10 +44,36 @@ class Client:
             self.server_socket.close()
             self.server_socket = None
 
+    def send_wikipedia_articles(self, input_file):
+        parquet_file = pq.ParquetFile(input_file)
+        total_articles = parquet_file.metadata.num_rows
+        print(f"Total inicial de artículos a enviar: {total_articles}")
+        ack_count = 0
+        for batch in parquet_file.iter_batches(batch_size=500):
+            for article in batch.to_pylist():
+                message_protocol.external.send_msg(
+                    self.server_socket,
+                    message_protocol.external.MsgType.WIKI_ARTICLE,
+                    article
+                )
+                message_protocol.external.recv_msg(self.server_socket)
+                ack_count += 1
+                if ack_count % 5000 == 0:
+                    print(f"ACK recibido del gateway para {ack_count} / {total_articles} artículos.")
+        if ack_count % 5000 != 0:
+            print(f"ACK recibido del gateway para {ack_count} / {total_articles} artículos.")
+        message_protocol.external.send_msg(
+            self.server_socket,
+            message_protocol.external.MsgType.END_OF_RECORDS
+        )
+        print("All articles sent. Waiting for final acknowledgment...")
+        message_protocol.external.recv_msg(self.server_socket)
+
 def main():
     client = Client()
     try:
         client.connect(SERVER_HOST, SERVER_PORT)
+        client.send_wikipedia_articles(INPUT_FILE)
     except Exception as e:
         print(f"An error occurred: {e}")
     finally:

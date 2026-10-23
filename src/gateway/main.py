@@ -3,11 +3,29 @@ import os
 import signal
 import socket
 
+from common import message_protocol
+
 SERVER_HOST = os.environ["SERVER_HOST"]
 SERVER_PORT = int(os.environ["SERVER_PORT"])
 
 def handle_client_request(client_socket):
-    ...
+    try:
+        while True:
+            msg_type, data = message_protocol.external.recv_msg(client_socket)
+            if msg_type == message_protocol.external.MsgType.WIKI_ARTICLE:
+                message_protocol.external.send_msg(
+                    client_socket,
+                    message_protocol.external.MsgType.ACK
+                )
+            elif msg_type == message_protocol.external.MsgType.END_OF_RECORDS:
+                print("Received end of records signal.")
+                message_protocol.external.send_msg(
+                    client_socket,
+                    message_protocol.external.MsgType.ACK
+                )
+                break
+    except Exception as e:
+        print(f"An error occurred while handling client request: {e}")
 
 def handle_sigterm(server_socket, client_list, sigterm_received):
     server_socket.shutdown(socket.SHUT_RDWR)
