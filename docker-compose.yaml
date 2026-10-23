@@ -8,6 +8,8 @@ services:
     - PYTHONUNBUFFERED=1
     - SERVER_HOST=gateway
     - SERVER_PORT=5678
+    - INPUT_FILE=/datasets/client_0.parquet
+    - OUTPUT_FILE=/output/client_0_output.parquet
     - RETRY_COUNT=5
     - DELAY_BETWEEN_RETRIES=1
     volumes:
