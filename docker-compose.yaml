@@ -8,6 +8,17 @@ services:
     - PYTHONUNBUFFERED=1
     - SERVER_HOST=gateway
     - SERVER_PORT=5678
+    - RETRY_COUNT=5
+    - DELAY_BETWEEN_RETRIES=1
     volumes:
     - ./datasets:/datasets
     - ./output:/output
+  gateway:
+    build:
+      context: ./src/
+      dockerfile: gateway/Dockerfile
+    container_name: gateway
+    environment:
+    - PYTHONUNBUFFERED=1
+    - SERVER_HOST=gateway
+    - SERVER_PORT=5678
