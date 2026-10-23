@@ -1,3 +1,4 @@
+import logging
 import multiprocessing
 import os
 import signal
@@ -23,7 +24,7 @@ def handle_client_request(client_socket):
                     message_protocol.external.MsgType.ACK
                 )
             elif msg_type == message_protocol.external.MsgType.END_OF_RECORDS:
-                print("Received end of records signal.")
+                logging.info("Received end of records signal.")
                 # Send EOF to next node via MOM
                 # ...
                 message_protocol.external.send_msg(
@@ -32,7 +33,7 @@ def handle_client_request(client_socket):
                 )
                 break
     except Exception as e:
-        print(f"An error occurred while handling client request: {e}")
+        logging.error(f"An error occurred while handling client request: {e}")
 
 def handle_sigterm(server_socket, client_list, sigterm_received):
     server_socket.shutdown(socket.SHUT_RDWR)
@@ -56,13 +57,13 @@ def main():
                         pool.apply_async(handle_client_request, args=(client_socket,))
                     except socket.error:
                         if sigterm_received.value == 0:
-                            print("The connection with the client was lost.")
+                            logging.error("The connection with the client was lost.")
                             return 1
                         else:
-                            print("SIGTERM received. Shutting down the server...")
+                            logging.info("SIGTERM received. Shutting down the server...")
                             return 0
                     except Exception as e:
-                        print(f"An error occurred: {e}")
+                        logging.error(f"An error occurred: {e}")
     return 0
 
 if __name__ == "__main__":

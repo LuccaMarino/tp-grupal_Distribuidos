@@ -1,4 +1,5 @@
 import pyarrow.parquet as pq
+import logging
 import os
 import signal
 import socket
@@ -20,7 +21,7 @@ class Client:
         self._prev_sigterm_handler = signal.signal(signal.SIGTERM, self._handle_sigterm)
 
     def _handle_sigterm(self, signum, frame):
-        print("SIGTERM received. Closing client...")
+        logging.info("SIGTERM received. Closing client...")
         self.closed = True
         self.disconnect()
         if self._prev_sigterm_handler:
@@ -31,10 +32,10 @@ class Client:
             try:
                 self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.server_socket.connect((server_host, server_port))
-                print(f"Successfully connected to {server_host}:{server_port} in attempt {attempt + 1}")
+                logging.info(f"Successfully connected to {server_host}:{server_port} in attempt {attempt + 1}")
                 return
             except ConnectionRefusedError:
-                print(f"Connection refused. Retrying in {DELAY_BETWEEN_RETRIES} seconds...")
+                logging.error(f"Connection refused. Retrying in {DELAY_BETWEEN_RETRIES} seconds...")
                 time.sleep(DELAY_BETWEEN_RETRIES)
         raise ConnectionError(f"Failed to connect to {server_host}:{server_port} after {RETRY_COUNT} attempts.")
 
@@ -47,7 +48,7 @@ class Client:
     def send_wikipedia_articles(self, input_file):
         parquet_file = pq.ParquetFile(input_file)
         total_articles = parquet_file.metadata.num_rows
-        print(f"Total inicial de artículos a enviar: {total_articles}")
+        print(f"Total articles to send: {total_articles}")
         ack_count = 0
         for batch in parquet_file.iter_batches(batch_size=500):
             for article in batch.to_pylist():
@@ -58,15 +59,15 @@ class Client:
                 )
                 message_protocol.external.recv_msg(self.server_socket)
                 ack_count += 1
-                if ack_count % 5000 == 0:
-                    print(f"ACK recibido del gateway para {ack_count} / {total_articles} artículos.")
-        if ack_count % 5000 != 0:
-            print(f"ACK recibido del gateway para {ack_count} / {total_articles} artículos.")
+                if ack_count % 10000 == 0:
+                    print(f"ACK received from gateway for {ack_count} / {total_articles} articles.")
+        if ack_count % 10000 != 0:
+            print(f"ACK received from gateway for {ack_count} / {total_articles} articles.")
         message_protocol.external.send_msg(
             self.server_socket,
             message_protocol.external.MsgType.END_OF_RECORDS
         )
-        print("All articles sent. Waiting for final acknowledgment...")
+        logging.info("All articles sent. Waiting for final acknowledgment...")
         message_protocol.external.recv_msg(self.server_socket)
 
 def main():
@@ -75,10 +76,10 @@ def main():
         client.connect(SERVER_HOST, SERVER_PORT)
         client.send_wikipedia_articles(INPUT_FILE)
     except Exception as e:
-        print(f"An error occurred: {e}")
+        logging.error(f"An error occurred: {e}")
     finally:
         client.disconnect()
-        print("Client disconnected.")
+        logging.info("Client disconnected.")
 
 if __name__ == "__main__":
     main()
