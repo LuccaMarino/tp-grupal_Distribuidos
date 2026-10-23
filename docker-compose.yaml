@@ -1,0 +1,13 @@
+services:
+  client_0:
+    build:
+      context: ./src/
+      dockerfile: client/Dockerfile
+    container_name: client_0
+    environment:
+    - PYTHONUNBUFFERED=1
+    - SERVER_HOST=gateway
+    - SERVER_PORT=5678
+    volumes:
+    - ./datasets:/datasets
+    - ./output:/output
