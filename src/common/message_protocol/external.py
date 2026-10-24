@@ -9,7 +9,8 @@ class MsgType:
     WIKI_ARTICLE = 1
     END_OF_RECORDS = 2
     ACK = 3
-    WIKI_RESULT = 4
+    QUERY_RESULT = 4
+    END_OF_QUERY_RESULTS = 5
 
 def _recv_sized(socket, size: int) -> bytes:
     """

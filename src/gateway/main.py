@@ -47,6 +47,7 @@ def handle_client_response(client_list):
     # input_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, INPUT_QUEUE)
 
     def _consume_result(message, ack, nack):
+        # SHOULD DELIVER QUERY RESULTS TO CLIENTS ON THE GO, AND HANDLE END OF RESULTS.
         client_index = 0
         try:
             for [message_handler_instance, client_socket] in client_list:
@@ -56,7 +57,7 @@ def handle_client_response(client_list):
                     continue
                 message_protocol.external.send_msg(
                     client_socket,
-                    message_protocol.external.MsgType.WIKI_RESULT,
+                    message_protocol.external.MsgType.QUERY_RESULT,
                     deserialized_message
                 )
                 message_protocol.external.recv_msg(client_socket)
