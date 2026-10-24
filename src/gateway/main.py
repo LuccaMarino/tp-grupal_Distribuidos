@@ -13,7 +13,7 @@ OUTPUT_QUEUE = os.environ["OUTPUT_QUEUE"]
 SERVER_HOST = os.environ["SERVER_HOST"]
 SERVER_PORT = int(os.environ["SERVER_PORT"])
 
-def handle_client_request(client_socket, message_handler):
+def handle_client_request(client_socket, message_handler: message_handler.MessageHandler):
     # output_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, OUTPUT_QUEUE)
 
     try:
@@ -28,7 +28,7 @@ def handle_client_request(client_socket, message_handler):
                 )
             elif msg_type == message_protocol.external.MsgType.END_OF_RECORDS:
                 logging.info("Received end of records signal.")
-                serialized_message = message_handler.serialize_article_message(data)
+                serialized_message = message_handler.serialize_eof_message(data)
                 # output_queue.send(serialized_message)
                 message_protocol.external.send_msg(
                     client_socket,
