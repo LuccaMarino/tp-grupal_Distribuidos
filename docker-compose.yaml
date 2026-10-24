@@ -22,6 +22,9 @@ services:
       dockerfile: gateway/Dockerfile
     container_name: gateway
     environment:
+      MOM_HOST: "rabbitmq"
+      INPUT_QUEUE: "results_queue"
+      OUTPUT_QUEUE: "articles_queue"
       PYTHONUNBUFFERED: "1"
       SERVER_HOST: "gateway"
       SERVER_PORT: "5678"
