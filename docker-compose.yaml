@@ -1,0 +1,87 @@
+x-client-env: &client-env
+  PYTHONUNBUFFERED: "1"
+  SERVER_HOST: "gateway"
+  SERVER_PORT: "5678"
+  RETRY_COUNT: "5"
+  DELAY_BETWEEN_RETRIES: "1"
+
+x-client-base: &client-base
+  build:
+    context: ./src/
+    dockerfile: client/Dockerfile
+  volumes:
+    - ./datasets:/datasets
+    - ./output:/output
+  depends_on:
+    - gateway
+
+services:
+  gateway:
+    build:
+      context: ./src/
+      dockerfile: gateway/Dockerfile
+    container_name: gateway
+    environment:
+      MOM_HOST: "rabbitmq"
+      INPUT_QUEUE: "results_queue"
+      OUTPUT_QUEUE: "articles_queue"
+      PYTHONUNBUFFERED: "1"
+      SERVER_HOST: "gateway"
+      SERVER_PORT: "5678"
+
+  rabbitmq:
+    build:
+      context: ./src/
+      dockerfile: rabbitmq/Dockerfile
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_LOG_LEVELS: "error"
+    healthcheck:
+      interval: 5s
+      retries: 10
+      start_period: 50s
+      test: rabbitmq-diagnostics check_port_connectivity
+      timeout: 3s
+    ports:
+    - 5672:5672
+    - 15672:15672
+
+  client_0:
+    <<: *client-base
+    container_name: client_0
+    environment:
+      <<: *client-env
+      INPUT_FILE: "/datasets/client_0.parquet"
+      OUTPUT_FILE: "/output/client_0_output.parquet"
+
+  # client_1:
+  #   <<: *client-base
+  #   container_name: client_1
+  #   environment:
+  #     <<: *client-env
+  #     INPUT_FILE: "/datasets/client_1.parquet"
+  #     OUTPUT_FILE: "/output/client_1_output.parquet"
+
+  # client_2:
+  #   <<: *client-base
+  #   container_name: client_2
+  #   environment:
+  #     <<: *client-env
+  #     INPUT_FILE: "/datasets/client_2.parquet"
+  #     OUTPUT_FILE: "/output/client_2_output.parquet"
+
+  # client_3:
+  #   <<: *client-base
+  #   container_name: client_3
+  #   environment:
+  #     <<: *client-env
+  #     INPUT_FILE: "/datasets/client_3.parquet"
+  #     OUTPUT_FILE: "/output/client_3_output.parquet"
+
+  # client_4:
+  #   <<: *client-base
+  #   container_name: client_4
+  #   environment:
+  #     <<: *client-env
+  #     INPUT_FILE: "/datasets/client_4.parquet"
+  #     OUTPUT_FILE: "/output/client_4_output.parquet"
