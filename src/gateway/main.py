@@ -4,6 +4,7 @@ import os
 import signal
 import socket
 
+import message_handler
 from common import middleware, message_protocol
 
 MOM_HOST = os.environ["MOM_HOST"]
@@ -12,30 +13,35 @@ OUTPUT_QUEUE = os.environ["OUTPUT_QUEUE"]
 SERVER_HOST = os.environ["SERVER_HOST"]
 SERVER_PORT = int(os.environ["SERVER_PORT"])
 
-def handle_client_request(client_socket):
+def handle_client_request(client_socket, message_handler):
     # output_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, OUTPUT_QUEUE)
 
     try:
         while True:
             msg_type, data = message_protocol.external.recv_msg(client_socket)
             if msg_type == message_protocol.external.MsgType.WIKI_ARTICLE:
-                # Serialize and send the article to the next node via MOM
-                # ...
+                serialized_message = message_handler.serialize_article_message(data)
+                # output_queue.send(serialized_message)
                 message_protocol.external.send_msg(
                     client_socket,
                     message_protocol.external.MsgType.ACK
                 )
             elif msg_type == message_protocol.external.MsgType.END_OF_RECORDS:
                 logging.info("Received end of records signal.")
-                # Send EOF to next node via MOM
-                # ...
+                serialized_message = message_handler.serialize_article_message(data)
+                # output_queue.send(serialized_message)
                 message_protocol.external.send_msg(
                     client_socket,
                     message_protocol.external.MsgType.ACK
                 )
-                break
+                return
+    except socket.error:
+        logging.error("The connection with the client was lost.")
     except Exception as e:
-        logging.error(f"An error occurred while handling client request: {e}")
+        logging.error(e)
+    finally:
+        ...
+        # output_queue.close()
 
 def handle_client_response(client_list):
     # input_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, INPUT_QUEUE)
@@ -43,9 +49,18 @@ def handle_client_response(client_list):
     def _consume_result(message, ack, nack):
         client_index = 0
         try:
-            for client_socket in list(client_list):
-                # Deserialize the message and send it to the client
-                ...
+            for [message_handler_instance, client_socket] in client_list:
+                deserialized_message = message_handler_instance.deserialize_result_message(message)
+                if not deserialized_message:
+                    client_index += 1
+                    continue
+                message_protocol.external.send_msg(
+                    client_socket,
+                    message_protocol.external.MsgType.WIKI_RESULT,
+                    deserialized_message
+                )
+                message_protocol.external.recv_msg(client_socket)
+                break
             client_list.pop(client_index)
             ack()
         except socket.error:
@@ -79,9 +94,9 @@ def main():
                 while True:
                     try:
                         client_socket, _ = server_socket.accept()
-                        # Create a message handler instance ...
-                        client_list.append(client_socket)
-                        pool.apply_async(handle_client_request, args=(client_socket,))
+                        message_handler_instance = message_handler.MessageHandler()
+                        client_list.append([message_handler_instance, client_socket])
+                        pool.apply_async(handle_client_request, (client_socket, message_handler_instance),)
                     except socket.error:
                         if sigterm_received.value == 0:
                             logging.error("The connection with the client was lost.")
