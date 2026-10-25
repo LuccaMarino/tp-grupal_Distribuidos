@@ -28,6 +28,9 @@ services:
       PYTHONUNBUFFERED: "1"
       SERVER_HOST: "gateway"
       SERVER_PORT: "5678"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
 
   rabbitmq:
     build:
@@ -45,6 +48,44 @@ services:
     ports:
     - 5672:5672
     - 15672:15672
+
+  parser_1:
+    build:
+      context: ./src/
+      dockerfile: parser/Dockerfile
+    container_name: parser_1
+    environment:
+      ID: "1"
+      MOM_HOST: "rabbitmq"
+      INPUT_QUEUE: "articles_queue"
+      OUTPUT_Q1: "results_queue"
+      OUTPUT_Q2: "images_queue"
+      OUTPUT_ABSTRACT: "abstracts_queue"
+      PYTHONUNBUFFERED: "1"
+      SERVER_HOST: "gateway"
+      SERVER_PORT: "5678"
+    depends_on:
+      gateway:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
+  image_downloader_1:
+    build:
+      context: ./src/
+      dockerfile: image_downloader/Dockerfile
+    container_name: image_downloader_1
+    environment:
+      ID: "1"
+      MOM_HOST: "rabbitmq"
+      INPUT_QUEUE: "images_queue"
+      OUTPUT_QUEUE: "results_queue"
+    depends_on:
+      parser_1:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
 
   client_0:
     <<: *client-base
