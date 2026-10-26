@@ -138,29 +138,47 @@ class MessageMiddlewareQueueRabbitMQ(_MessageMiddlewareRabbitMQBase, MessageMidd
         except AMQPError as e:
             raise MessageMiddlewareMessageError(RABBITMQ_ERROR_MSG.format(action, e)) from e
 
-
+        
 class MessageMiddlewareExchangeRabbitMQ(_MessageMiddlewareRabbitMQBase, MessageMiddlewareExchange):
 
-    def __init__(self, host, exchange_name, routing_keys):
+    # queue_name es opcional
+    # sin nombre (None), se crea recién en el primer start_consuming y se reutiliza en los 
+    # siguientes. Con nombre, la cola se declara y bindea al construir el objeto, 
+    # reteniendo los mensajes que lleguen antes de llamar a start_consuming
+    def __init__(self, host, exchange_name, routing_keys, queue_name=None):
         self._exchange_name = exchange_name
         self._routing_keys = routing_keys
+        self._queue_name = queue_name
         super().__init__(host)
 
     def _declare(self):
         self._channel.exchange_declare(exchange=self._exchange_name, exchange_type='direct', durable=True)
+        if self._queue_name is not None:
+            self._channel.queue_declare(queue=self._queue_name, durable=True)
+            self._bind_queue(self._queue_name)
 
-    def start_consuming(self, on_message_callback):
-        action = f"consuming from exchange {self._exchange_name}"
+    def _bind_queue(self, queue_name):
+        for routing_key in self._routing_keys:
+            self._channel.queue_bind(exchange=self._exchange_name, queue=queue_name, routing_key=routing_key)
+
+    # Crea la cola anónima una sola vez. Si se declarara en cada start_consuming, las
+    # anteriores seguirían existiendo mientras la conexión siiga viva
+    def _declare_anonymous_queue(self):
+        action = f"binding a queue to exchange {self._exchange_name}"
         try:
             result = self._channel.queue_declare(queue='', exclusive=True)
             queue_name = result.method.queue
-            for routing_key in self._routing_keys:
-                self._channel.queue_bind(exchange=self._exchange_name, queue=queue_name, routing_key=routing_key)
-            self._consume(queue_name, on_message_callback)
+            self._bind_queue(queue_name)
         except AMQPConnectionError as e:
             raise MessageMiddlewareDisconnectedError(DISCONNECTED_MSG.format(action, e)) from e
         except AMQPError as e:
             raise MessageMiddlewareMessageError(RABBITMQ_ERROR_MSG.format(action, e)) from e
+        self._queue_name = queue_name
+
+    def start_consuming(self, on_message_callback):
+        if self._queue_name is None:
+            self._declare_anonymous_queue()
+        self._consume(self._queue_name, on_message_callback)
 
     def send(self, message):
         action = f"sending to exchange {self._exchange_name}"
