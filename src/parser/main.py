@@ -23,6 +23,9 @@ def extract_sections(sections_raw):
     except Exception as e:
         logging.error(f"Error parsing sections JSON: {e}")
         return section_names
+    for section in sections_raw:
+        if section.get("name") is not None:
+            section_names.add(section["name"].strip().lower())
     return section_names
 
 def parse_date_modified(value):
@@ -52,10 +55,15 @@ def extract_article_fields(article: dict) -> dict:
     result["language"] = article.get("lang")
     if "abstract" in article:
         result["abstract"] = article["abstract"]
-    result["image"] = article.get("image")
+    
+    raw_image = article.get("image")
+    if raw_image is not None:
+        result["image_url"] = raw_image
+    else:
+        result["image_url"] = None
     result["name"] = article.get("name")
     result["url"] = article.get("url")
-    sections = extract_sections(article.get("sections", []))
+    sections = extract_sections(article.get("sections"))
     if "biography" in sections or "biographie" in sections:
         result["biography"] = True
     else:
@@ -67,11 +75,11 @@ def consume_article(client_id, article, q1, q2, abstracts):
     try:
         article_fields = extract_article_fields(article)
         if article_fields.get("year") is not None and article_fields["year"] <= 2020 and article_fields.get("language") == "en" and article_fields.get("date_modified"):
-            #q1.send(message_protocol.internal.serialize([client_id, article_fields["url"], article_fields["date_modified"]]))
+            q1.send(message_protocol.internal.serialize([client_id, article_fields["url"], article_fields["date_modified"]]))
             pass
-        if article_fields.get("biography") and article_fields.get("year") is not None and article_fields["year"] <= 2020 and article_fields.get("image"):
+        if article_fields["biography"] == True and article_fields.get("year") is not None and article_fields["year"] <= 2020 and article_fields.get("image_url"):
             logging.info(f"SENDING biography article to q2: {article_fields['name']} ({article_fields['url']})")
-            #q2.send(message_protocol.internal.serialize([client_id, article_fields["name"], article_fields["url"], article_fields["image_url"]]))
+            q2.send(message_protocol.internal.serialize([client_id, article_fields["name"], article_fields["url"], article_fields["image_url"]]))
         if article_fields.get("language") and article_fields.get("year") is not None and  article_fields.get("url") and article_fields.get("abstract"):
             #abstracts.send(message_protocol.internal.serialize([client_id, article_fields]))
             pass

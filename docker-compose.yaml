@@ -116,21 +116,22 @@ services:
       rabbitmq:
         condition: service_healthy
 
-  # image_downloader_1:
-  #   build:
-  #     context: ./src/
-  #     dockerfile: image_downloader/Dockerfile
-  #   container_name: image_downloader_1
-  #   environment:
-  #     ID: "1"
-  #     MOM_HOST: "rabbitmq"
-  #     INPUT_QUEUE: "images_queue"
-  #     OUTPUT_QUEUE: "results_queue"
-  #   depends_on:
-  #     parser_1:
-  #       condition: service_started
-  #     rabbitmq:
-  #       condition: service_healthy
+  image_downloader_0:
+    build:
+      context: ./src/
+      dockerfile: image_downloader/Dockerfile
+    container_name: image_downloader_0
+    environment:
+      ID: "0"
+      MOM_HOST: "rabbitmq"
+      GATEWAY_AMMOUNT: 1
+      INPUT_GROUP: "images_group"
+      OUTPUT_GROUP: "results_group"
+    depends_on:
+      parser_0:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
 
 
   client_0:
@@ -138,7 +139,7 @@ services:
     container_name: client_0
     environment:
       <<: *client-env
-      INPUT_FILE: "/datasets/client_0.parquet"
+      INPUT_FILE: "/datasets/client_1.parquet"
       OUTPUT_FILE: "/output/client_0_output.parquet"
 
   # client_1:
