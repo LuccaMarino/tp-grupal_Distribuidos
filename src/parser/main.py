@@ -1,7 +1,8 @@
 import json
 
-from common import middleware, message_protocol
+from common import message_protocol
 from common.middleware import GroupMember, GroupSender
+from common.middleware.middleware import MessageMiddlewareCloseError
 from datetime import datetime, timezone
 import logging
 import os
@@ -26,13 +27,24 @@ class Parser:
         self.abstract_group = GroupSender(MOM_HOST, OUTPUT_ABSTRACT, SUM_AMMOUNT)
         self.input_group_member = GroupMember(MOM_HOST, INPUT_GROUP, int(ID))
 
-    def _handle_sigterm(self, signum, frame):
+    def _handle_sigterm(self, _signum, _frame):
         logging.info("Received SIGTERM signal")
         self.input_group_member.stop_consuming_threadsafe()
         self.q1_group.close()
         self.q2_group.close()
         self.abstract_group.close()
 
+    def _close(self):
+        for connection in (
+            self.input_group_member,
+            self.q1_group,
+            self.q2_group,
+            self.abstract_group,
+        ):
+            try:
+                connection.close()
+            except MessageMiddlewareCloseError as e:
+                logging.error(e)
 
     def extract_sections(self, sections_raw):
         section_names = set()
@@ -101,37 +113,38 @@ class Parser:
             if article_fields.get("language") and article_fields.get("year") is not None and  article_fields.get("url") and article_fields.get("abstract"):
                 abstracts.send(message_protocol.internal.serialize_data(client_id, [[article_fields.get("language"), article_fields.get("year"), article_fields.get("url"), article_fields.get("abstract")]]))
                 #pass
-        except Exception as e:
+        except Exception:
             logging.exception("Error processing article message")
 
     def consume_eof(self, client_id, abstracts):
         try:
             eof_message = message_protocol.internal.serialize_eof(client_id, ID)
-            #abstracts.send(eof_message)
-        except Exception as e:
+            abstracts.send(eof_message)
+        except Exception:
             logging.exception("Error processing EOF message")
     
     def consume_message(self, message, ack, nack):
-            try:
-                msg_type, client_id, args = message_protocol.internal.deserialize(message)
-                if msg_type == message_protocol.internal.MsgType.EOF:
-                    self.consume_eof(client_id, self.abstract_group)
-                elif msg_type == message_protocol.internal.MsgType.DATA:
-                    if len(args) != 1 or not isinstance(args[0], list):
-                        raise ValueError("Expected a list of articles in the parser input message")
-                    for article in args[0]:
-                        if not isinstance(article, dict):
-                            raise ValueError("Expected each parser input article to be an object")
-                        self.consume_article(client_id, article, self.q1_group, self.q2_group, self.abstract_group)
-                else:
-                    raise ValueError(f"Unexpected parser input message type: {msg_type}")
-                ack()
-            except Exception:
-                logging.exception("Error decoding parser input message")
-                nack()
+        try:
+            msg_type, client_id, args = message_protocol.internal.deserialize(message)
+            if msg_type == message_protocol.internal.MsgType.EOF:
+                self.consume_eof(client_id, self.abstract_group)
+            elif msg_type == message_protocol.internal.MsgType.DATA:
+                if len(args) != 1 or not isinstance(args[0], list):
+                    raise ValueError("Expected a list of articles in the parser input message")
+                for article in args[0]:
+                    if not isinstance(article, dict):
+                        raise ValueError("Expected each parser input article to be an object")
+                    self.consume_article(client_id, article, self.q1_group, self.q2_group, self.abstract_group)
+            else:
+                raise ValueError(f"Unexpected parser input message type: {msg_type}")
+            ack()
+        except Exception:
+            logging.exception("Error decoding parser input message")
+            nack()
+
     def start(self):
         try:
-            self.input_group_member.start_consuming(self._process_message)
+            self.input_group_member.start_consuming(self.consume_message)
         finally:
             self._close()
 

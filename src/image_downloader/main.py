@@ -27,11 +27,11 @@ def main():
     logging.info("Starting image downloader service...")
     output_group = GroupSender(MOM_HOST, OUTPUT_GROUP, GATEWAY_AMMOUNT)
     input_group = GroupMember(MOM_HOST, INPUT_GROUP, ID)
-    def consume_image(message, ack, nack):
+    def consume_image(message, ack, _nack):
         logging.info("Received image download request")
         try:
-            type, client_id, fields = message_protocol.internal.deserialize(message)
-            if type != message_protocol.internal.MsgType.DATA:
+            msg_type, client_id, fields = message_protocol.internal.deserialize(message)
+            if msg_type != message_protocol.internal.MsgType.DATA:
                 logging.error("Unexpected message type for image download request")
                 raise ValueError("Unexpected message type for image download request")
             for name, url, image_url in fields:
