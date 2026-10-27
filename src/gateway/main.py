@@ -4,24 +4,27 @@ import os
 import signal
 import socket
 
+from common.middleware import GroupSender, GroupMember
 import message_handler
-from common import middleware, message_protocol
+from common import message_protocol
 
 MOM_HOST = os.environ["MOM_HOST"]
-INPUT_QUEUE = os.environ["INPUT_QUEUE"]
-OUTPUT_QUEUE = os.environ["OUTPUT_QUEUE"]
+INPUT_GROUP = os.environ["INPUT_GROUP"]
+OUTPUT_GROUP = os.environ["OUTPUT_GROUP"]
 SERVER_HOST = os.environ["SERVER_HOST"]
 SERVER_PORT = int(os.environ["SERVER_PORT"])
+PARSER_AMOUNT = int(os.environ["PARSER_AMOUNT"])
+GATEWAY_ID = 0 #Por ahora solo tenemos un gateway
 
 def handle_client_request(client_socket, message_handler: message_handler.MessageHandler):
-    # output_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, OUTPUT_QUEUE)
+    output_group = GroupSender(MOM_HOST, OUTPUT_GROUP, PARSER_AMOUNT)
 
     try:
         while True:
             msg_type, data = message_protocol.external.recv_msg(client_socket)
             if msg_type == message_protocol.external.MsgType.WIKI_ARTICLE:
                 serialized_message = message_handler.serialize_article_message(data)
-                # output_queue.send(serialized_message)
+                output_group.send(serialized_message)
                 message_protocol.external.send_msg(
                     client_socket,
                     message_protocol.external.MsgType.ACK
@@ -29,7 +32,7 @@ def handle_client_request(client_socket, message_handler: message_handler.Messag
             elif msg_type == message_protocol.external.MsgType.END_OF_RECORDS:
                 logging.info("Received end of records signal.")
                 serialized_message = message_handler.serialize_eof_message(data)
-                # output_queue.send(serialized_message)
+                output_group.broadcast(serialized_message)
                 message_protocol.external.send_msg(
                     client_socket,
                     message_protocol.external.MsgType.ACK
@@ -41,10 +44,10 @@ def handle_client_request(client_socket, message_handler: message_handler.Messag
         logging.error(e)
     finally:
         ...
-        # output_queue.close()
+        output_group.close()
 
 def handle_client_response(client_list):
-    # input_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, INPUT_QUEUE)
+    input_group = GroupMember(MOM_HOST, INPUT_GROUP, GATEWAY_ID)
 
     def _consume_result(message, ack, nack):
         # SHOULD DELIVER QUERY RESULTS TO CLIENTS ON THE GO, AND HANDLE END OF RESULTS.
@@ -71,10 +74,10 @@ def handle_client_response(client_list):
         except Exception as e:
             logging.error(e)
             nack()
-            # input_queue.stop_consuming()
+            input_group.stop_consuming()
 
-    # input_queue.start_consuming(_consume_result)
-    # input_queue.close()
+    input_group.start_consuming(_consume_result)
+    input_group.close()
 
 def handle_sigterm(server_socket, client_list, sigterm_received):
     server_socket.shutdown(socket.SHUT_RDWR)

@@ -23,11 +23,15 @@ services:
     container_name: gateway
     environment:
       MOM_HOST: "rabbitmq"
-      INPUT_QUEUE: "results_queue"
-      OUTPUT_QUEUE: "articles_queue"
+      INPUT_GROUP: "results_group"
+      OUTPUT_GROUP: "articles_group"
       PYTHONUNBUFFERED: "1"
       SERVER_HOST: "gateway"
       SERVER_PORT: "5678"
+      PARSER_AMOUNT: 3
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
 
   rabbitmq:
     build:
@@ -45,6 +49,89 @@ services:
     ports:
     - 5672:5672
     - 15672:15672
+
+  parser_0:
+    build:
+      context: ./src/
+      dockerfile: parser/Dockerfile
+    container_name: parser_0
+    environment:
+      ID: "0"
+      MOM_HOST: "rabbitmq"
+      INPUT_GROUP: "articles_group"
+      OUTPUT_Q1: "results_group"
+      OUTPUT_Q2: "images_group"
+      OUTPUT_ABSTRACT: "abstracts_group"
+      GATEWAY_AMMOUNT: 1
+      IMAGE_DOWNLOADER_AMMOUNT: 1
+      WORD_SUM_AMMOUNT: 1
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      gateway:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
+  parser_1:
+    build:
+      context: ./src/
+      dockerfile: parser/Dockerfile
+    container_name: parser_1
+    environment:
+      ID: "1"
+      MOM_HOST: "rabbitmq"
+      INPUT_GROUP: "articles_group"
+      OUTPUT_Q1: "results_group"
+      OUTPUT_Q2: "images_group"
+      OUTPUT_ABSTRACT: "abstracts_group"
+      GATEWAY_AMMOUNT: 1
+      IMAGE_DOWNLOADER_AMMOUNT: 1
+      WORD_SUM_AMMOUNT: 1
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      gateway:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
+  parser_2:
+    build:
+      context: ./src/
+      dockerfile: parser/Dockerfile
+    container_name: parser_2
+    environment:
+      ID: "2"
+      MOM_HOST: "rabbitmq"
+      INPUT_GROUP: "articles_group"
+      OUTPUT_Q1: "results_group"
+      OUTPUT_Q2: "images_group"
+      OUTPUT_ABSTRACT: "abstracts_group"
+      GATEWAY_AMMOUNT: 1
+      IMAGE_DOWNLOADER_AMMOUNT: 1
+      WORD_SUM_AMMOUNT: 1
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      gateway:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
+  image_downloader_0:
+    build:
+      context: ./src/
+      dockerfile: image_downloader/Dockerfile
+    container_name: image_downloader_0
+    environment:
+      ID: "0"
+      MOM_HOST: "rabbitmq"
+      GATEWAY_AMMOUNT: 1
+      INPUT_GROUP: "images_group"
+      OUTPUT_GROUP: "results_group"
+    depends_on:
+      parser_0:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
 
   word_sum_0:
     build:
@@ -70,7 +157,7 @@ services:
     container_name: client_0
     environment:
       <<: *client-env
-      INPUT_FILE: "/datasets/client_0.parquet"
+      INPUT_FILE: "/datasets/client_1.parquet"
       OUTPUT_FILE: "/output/client_0_output.parquet"
 
   # client_1:
