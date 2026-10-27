@@ -170,6 +170,28 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  q5_joiner_0:
+    build:
+      context: ./src/
+      dockerfile: q5_joiner/Dockerfile
+    container_name: q5_joiner_0
+    volumes:
+    - q5_joiner_new_articles:/new_articles
+    environment:
+      ID: "0"
+      MOM_HOST: "rabbitmq"
+      NEW_ARTICLES_GROUP: "q5_joiner_group"
+      SUM_PARTIAL_LENGTH_GROUP: "sum_partial_length_group"
+      RESULTS_GROUP: "results_group"
+      EXPECTED_WORDSUM_EOFS: 3 # PARSER_AMOUNT (3) * WORD_SUM_AMOUNT (1)
+      EXPECTED_WORDCOUNTER_EOFS: 1 # WORD_COUNTER_AMOUNT (1)
+      GATEWAY_AMMOUNT: 1
+      STORAGE_PATH: "/new_articles"
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
   client_0:
     <<: *client-base
     container_name: client_0
@@ -209,3 +231,6 @@ services:
   #     <<: *client-env
   #     INPUT_FILE: "/datasets/client_4.parquet"
   #     OUTPUT_FILE: "/output/client_4_output.parquet"
+
+volumes:
+  q5_joiner_new_articles:
