@@ -1,22 +1,31 @@
+import json
+
 from common import middleware, message_protocol
+from common.middleware import GroupMember, GroupSender
 from datetime import datetime, timezone
 import logging
 import os
 
 ID = os.environ["ID"]
 MOM_HOST = os.environ["MOM_HOST"]
-INPUT_QUEUE = os.environ["INPUT_QUEUE"]
+INPUT_GROUP = os.environ["INPUT_GROUP"]
 OUTPUT_Q1 = os.environ["OUTPUT_Q1"]
 OUTPUT_Q2 = os.environ["OUTPUT_Q2"]
 OUTPUT_ABSTRACT = os.environ["OUTPUT_ABSTRACT"]
+GATEWAY_AMMOUNT = int(os.environ["GATEWAY_AMMOUNT"])
+SUM_AMMOUNT = int(os.environ["WORD_SUM_AMMOUNT"])
+IMAGE_DOWNLOADER_AMMOUNT = int(os.environ["IMAGE_DOWNLOADER_AMMOUNT"])
 
-def extract_sections(sections):
+def extract_sections(sections_raw):
     section_names = set()
-    for section in sections:
-        if isinstance(section, dict) and "name" in section:
-            section_names.add(section["name"].lower())
-        elif isinstance(section, str):
-            section_names.add(section.lower())
+    try:
+        sections_raw = json.loads(sections_raw)
+    except Exception as e:
+        logging.error(f"Error parsing sections JSON: {e}")
+        return section_names
+    for section in sections_raw:
+        if section.get("name") is not None:
+            section_names.add(section["name"].strip().lower())
     return section_names
 
 def parse_date_modified(value):
@@ -43,30 +52,33 @@ def extract_article_fields(article: dict) -> dict:
     if date_modified is not None:
         result["date_modified"] = date_modified.isoformat()
         result["year"] = date_modified.year
-    if "in_language" in article:
-        result["language"] = article["in_language"].get("identifier")
+    result["language"] = article.get("lang")
     if "abstract" in article:
         result["abstract"] = article["abstract"]
-    image = article.get("image")
-    if isinstance(image, dict):
-        result["image_url"] = image.get("content_url")
-    elif isinstance(image, str):
-        result["image_url"] = image
+    
+    raw_image = article.get("image")
+    if raw_image is not None:
+        result["image_url"] = raw_image
+    else:
+        result["image_url"] = None
     result["name"] = article.get("name")
     result["url"] = article.get("url")
-    sections = extract_sections(article.get("sections", []))
+    sections = extract_sections(article.get("sections"))
     if "biography" in sections or "biographie" in sections:
         result["biography"] = True
+    else:
+        result["biography"] = False
+    #print(result)
     return result
 
 def consume_article(client_id, article, q1, q2, abstracts):
     try:
         article_fields = extract_article_fields(article)
         if article_fields.get("year") is not None and article_fields["year"] <= 2020 and article_fields.get("language") == "en" and article_fields.get("date_modified"):
-            #q1.send(message_protocol.internal.serialize([client_id, article_fields["url"], article_fields["date_modified"]]))
+            q1.send(message_protocol.internal.serialize([client_id, article_fields["url"], article_fields["date_modified"]]))
             pass
-        if article_fields.get("biography") and article_fields.get("year") is not None and article_fields["year"] <= 2020 and article_fields.get("image_url"):
-            logging.info(f"Sending biography article to q2: {article_fields['name']} ({article_fields['url']})")
+        if article_fields["biography"] == True and article_fields.get("year") is not None and article_fields["year"] <= 2020 and article_fields.get("image_url"):
+            logging.info(f"SENDING biography article to q2: {article_fields['name']} ({article_fields['url']})")
             q2.send(message_protocol.internal.serialize([client_id, article_fields["name"], article_fields["url"], article_fields["image_url"]]))
         if article_fields.get("language") and article_fields.get("year") is not None and  article_fields.get("url") and article_fields.get("abstract"):
             #abstracts.send(message_protocol.internal.serialize([client_id, article_fields]))
@@ -88,10 +100,10 @@ def consume_eof(client_id, abstracts):
 def main():
     logging.basicConfig(level=logging.INFO)
     logging.info("Starting parser service...")
-    q1_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, OUTPUT_Q1)
-    q2_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, OUTPUT_Q2)
-    abstract_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, OUTPUT_ABSTRACT)
-    input_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, INPUT_QUEUE)
+    q1_group = GroupSender(MOM_HOST, OUTPUT_Q1, GATEWAY_AMMOUNT)
+    q2_group = GroupSender(MOM_HOST, OUTPUT_Q2, IMAGE_DOWNLOADER_AMMOUNT)
+    abstract_group = GroupSender(MOM_HOST, OUTPUT_ABSTRACT, SUM_AMMOUNT)
+    input_group_member = GroupMember(MOM_HOST, INPUT_GROUP, int(ID))
 
     def consume_message(message, ack, nack):
         try:
@@ -99,9 +111,9 @@ def main():
             if not isinstance(fields, list):
                 logging.error("Expected a list in the parser input message")
             if len(fields) == 1:
-                succeeded = consume_eof(fields[0], abstract_queue)
+                succeeded = consume_eof(fields[0], abstract_group)
             elif len(fields) == 2:
-                succeeded = consume_article(fields[0], fields[1], q1_queue, q2_queue, abstract_queue)
+                succeeded = consume_article(fields[0], fields[1], q1_group, q2_group, abstract_group)
             else:
                 logging.error(f"Unexpected parser input message with {len(fields)} fields")
                 raise ValueError("Unexpected parser input message")
@@ -112,7 +124,7 @@ def main():
         except Exception:
             logging.exception("Error decoding parser input message")
             nack()
-    input_queue.start_consuming(consume_message)
+    input_group_member.start_consuming(consume_message)
 
 if __name__ == "__main__":
     main()
