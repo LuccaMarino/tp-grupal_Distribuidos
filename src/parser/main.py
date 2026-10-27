@@ -29,22 +29,22 @@ class Parser:
 
     def _handle_sigterm(self, _signum, _frame):
         logging.info("Received SIGTERM signal")
-        self.input_group_member.stop_consuming_threadsafe()
-        self.q1_group.close()
-        self.q2_group.close()
-        self.abstract_group.close()
+        try:
+            self.abstract_group.close()
+            self.q1_group.close()
+            self.q2_group.close()
+            self.input_group_member.close()
+        except MessageMiddlewareCloseError as e:
+            logging.error(e)
 
     def _close(self):
-        for connection in (
-            self.input_group_member,
-            self.q1_group,
-            self.q2_group,
-            self.abstract_group,
-        ):
-            try:
-                connection.close()
-            except MessageMiddlewareCloseError as e:
-                logging.error(e)
+        try:
+            self.abstract_group.close()
+            self.q1_group.close()
+            self.q2_group.close()
+            self.input_group_member.close()
+        except MessageMiddlewareCloseError as e:
+            logging.error(e)
 
     def extract_sections(self, sections_raw):
         section_names = set()
@@ -120,6 +120,7 @@ class Parser:
         try:
             eof_message = message_protocol.internal.serialize_eof(client_id, ID)
             abstracts.send(eof_message)
+            logging.info("Sent EOF message to abstract group")
         except Exception:
             logging.exception("Error processing EOF message")
     
