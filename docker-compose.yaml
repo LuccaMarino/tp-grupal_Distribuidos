@@ -46,6 +46,25 @@ services:
     - 5672:5672
     - 15672:15672
 
+  word_sum_0:
+    build:
+      context: ./src/
+      dockerfile: word_sum/Dockerfile
+    container_name: word_sum_0
+    environment:
+      ID: "0"
+      MOM_HOST: "rabbitmq"
+      INPUT_GROUP: "abstracts_group"
+      AGGREGATOR_GROUP: "word_aggregators_group"
+      AGGREGATOR_AMOUNT: 2
+      WORD_COUNTER_GROUP: "word_counters_group"
+      WORD_COUNTER_AMOUNT: 1
+      Q5_JOINER_GROUP: "q5_joiner_group"
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
   client_0:
     <<: *client-base
     container_name: client_0
