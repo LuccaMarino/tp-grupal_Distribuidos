@@ -26,25 +26,18 @@ class Parser:
         self.q2_group = GroupSender(MOM_HOST, OUTPUT_Q2, IMAGE_DOWNLOADER_AMMOUNT)
         self.abstract_group = GroupSender(MOM_HOST, OUTPUT_ABSTRACT, SUM_AMMOUNT)
         self.input_group_member = GroupMember(MOM_HOST, INPUT_GROUP, int(ID))
+        signal.signal(signal.SIGTERM, self._handle_sigterm)
 
     def _handle_sigterm(self, _signum, _frame):
         logging.info("Received SIGTERM signal")
-        try:
-            self.abstract_group.close()
-            self.q1_group.close()
-            self.q2_group.close()
-            self.input_group_member.close()
-        except MessageMiddlewareCloseError as e:
-            logging.error(e)
+        self.input_group_member.stop_consuming_threadsafe()
 
     def _close(self):
-        try:
-            self.abstract_group.close()
-            self.q1_group.close()
-            self.q2_group.close()
-            self.input_group_member.close()
-        except MessageMiddlewareCloseError as e:
-            logging.error(e)
+        for resource in (self.input_group_member, self.q1_group, self.q2_group, self.abstract_group):
+            try:
+                resource.close()
+            except MessageMiddlewareCloseError as e:
+                logging.error(e)
 
     def extract_sections(self, sections_raw):
         section_names = set()
@@ -154,7 +147,6 @@ def main():
     logging.basicConfig(level=logging.INFO)
     logging.info("Starting parser service...")
     parser = Parser()
-    signal.signal(signal.SIGTERM, parser._handle_sigterm)
     parser.start()
     return 0
 
