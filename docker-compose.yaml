@@ -185,7 +185,7 @@ services:
       RESULTS_GROUP: "results_group"
       EXPECTED_WORDSUM_EOFS: 3 # PARSER_AMOUNT (3) * WORD_SUM_AMOUNT (1)
       EXPECTED_WORDCOUNTER_EOFS: 1 # WORD_COUNTER_AMOUNT (1)
-      GATEWAY_AMMOUNT: 1
+      GATEWAY_AMOUNT: 1
       STORAGE_PATH: "/new_articles"
       PYTHONUNBUFFERED: "1"
     depends_on:
