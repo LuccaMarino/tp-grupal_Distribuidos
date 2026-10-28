@@ -4,6 +4,7 @@ from common import message_protocol
 import logging
 import os
 import base64
+import signal
 
 MOM_HOST = os.environ["MOM_HOST"]
 INPUT_GROUP = os.environ["INPUT_GROUP"]
@@ -15,19 +16,29 @@ USER_AGENT = (
     "0.1 (FIUBA Sistemas Distribuidos)"
 )
 
+class ImageDownloader:
+    def __init__(self):
+        self.output_group = GroupSender(MOM_HOST, OUTPUT_GROUP, GATEWAY_AMMOUNT)
+        self.input_group_member = GroupMember(MOM_HOST, INPUT_GROUP, int(ID))
+        signal.signal(signal.SIGTERM, self._handle_sigterm)
 
-def download_image(url)-> bytes:
-    response = requests.get(url, headers={"User-Agent": USER_AGENT},timeout=15,)
-    response.raise_for_status()
-    return response.content
+    def _handle_sigterm(self, _signum, _frame):
+        logging.info("Received SIGTERM signal")
+        self.input_group_member.stop_consuming_threadsafe()
 
+    def _close(self):
+        for resource in (self.input_group_member,self.output_group,):
+            try:
+                resource.close()
+            except Exception as e:
+                logging.error(e)
 
-def main():
-    logging.basicConfig(level=logging.INFO)
-    logging.info("Starting image downloader service...")
-    output_group = GroupSender(MOM_HOST, OUTPUT_GROUP, GATEWAY_AMMOUNT)
-    input_group = GroupMember(MOM_HOST, INPUT_GROUP, ID)
-    def consume_image(message, ack, _nack):
+    def download_image(self, url)-> bytes:
+        response = requests.get(url, headers={"User-Agent": USER_AGENT},timeout=15,)
+        response.raise_for_status()
+        return response.content
+
+    def consume_image(self, message, ack, _nack):
         logging.info("Received image download request")
         try:
             msg_type, client_id, fields = message_protocol.internal.deserialize(message)
@@ -35,16 +46,27 @@ def main():
                 logging.error("Unexpected message type for image download request")
                 raise ValueError("Unexpected message type for image download request")
             for name, url, image_url in fields:
-                image_content = download_image(image_url)
+                image_content = self.download_image(image_url)
                 image_content_b64 = base64.b64encode(image_content).decode("ascii")
-                output_group.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q2, [name, url, image_content_b64]))
+                self.output_group.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q2, [name, url, image_content_b64]))
                 logging.info(f"Downloaded image size: {len(image_content)} bytes" + f" for article {name} ({url})")
         except requests.HTTPError as e:
             logging.warning("Downloading image failed for %s (%s): %s", url, image_url, e)
         except Exception:
             logging.exception("Error processing image download request")
         ack()
-    input_group.start_consuming(consume_image)
+
+    def start(self):
+        try:
+            self.input_group_member.start_consuming(self.consume_image)
+        finally:
+            self._close()
+
+def main():
+    logging.basicConfig(level=logging.INFO)
+    logging.info("Starting image downloader service...")
+    image_downloader = ImageDownloader()
+    image_downloader.start()
 
 if __name__ == "__main__":
     main()
