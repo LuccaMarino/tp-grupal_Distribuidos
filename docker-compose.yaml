@@ -145,7 +145,7 @@ services:
       AGGREGATOR_GROUP: "word_aggregators_group"
       AGGREGATOR_AMOUNT: 2
       WORD_COUNTER_GROUP: "word_counters_group"
-      WORD_COUNTER_AMOUNT: 1
+      WORD_COUNTER_AMOUNT: 3
       Q5_JOINER_GROUP: "q5_joiner_group"
       PYTHONUNBUFFERED: "1"
     depends_on:
@@ -159,6 +159,42 @@ services:
     container_name: word_counter_0
     environment:
       ID: "0"
+      MOM_HOST: "rabbitmq"
+      INPUT_GROUP: "word_counters_group"
+      SUM_PARTIAL_LENGTH_GROUP: "sum_partial_length_group"
+      Q5_JOINER_AMOUNT: 1
+      # EXPECTED_EOFS = PARSER_AMOUNT (3) * WORD_SUM_AMOUNT (1)
+      EXPECTED_EOFS: 3
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  word_counter_1:
+    build:
+      context: ./src/
+      dockerfile: word_counter/Dockerfile
+    container_name: word_counter_1
+    environment:
+      ID: "1"
+      MOM_HOST: "rabbitmq"
+      INPUT_GROUP: "word_counters_group"
+      SUM_PARTIAL_LENGTH_GROUP: "sum_partial_length_group"
+      Q5_JOINER_AMOUNT: 1
+      # EXPECTED_EOFS = PARSER_AMOUNT (3) * WORD_SUM_AMOUNT (1)
+      EXPECTED_EOFS: 3
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  word_counter_2:
+    build:
+      context: ./src/
+      dockerfile: word_counter/Dockerfile
+    container_name: word_counter_2
+    environment:
+      ID: "2"
       MOM_HOST: "rabbitmq"
       INPUT_GROUP: "word_counters_group"
       SUM_PARTIAL_LENGTH_GROUP: "sum_partial_length_group"
@@ -184,7 +220,7 @@ services:
       SUM_PARTIAL_LENGTH_GROUP: "sum_partial_length_group"
       RESULTS_GROUP: "results_group"
       EXPECTED_WORDSUM_EOFS: 3 # PARSER_AMOUNT (3) * WORD_SUM_AMOUNT (1)
-      EXPECTED_WORDCOUNTER_EOFS: 1 # WORD_COUNTER_AMOUNT (1)
+      EXPECTED_WORDCOUNTER_EOFS: 3 # WORD_COUNTER_AMOUNT (3)
       GATEWAY_AMOUNT: 1
       STORAGE_PATH: "/new_articles"
       PYTHONUNBUFFERED: "1"
