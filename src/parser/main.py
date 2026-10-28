@@ -26,23 +26,16 @@ class Parser:
         self.q2_group = GroupSender(MOM_HOST, OUTPUT_Q2, IMAGE_DOWNLOADER_AMMOUNT)
         self.abstract_group = GroupSender(MOM_HOST, OUTPUT_ABSTRACT, SUM_AMMOUNT)
         self.input_group_member = GroupMember(MOM_HOST, INPUT_GROUP, int(ID))
+        signal.signal(signal.SIGTERM, self._handle_sigterm)
 
     def _handle_sigterm(self, _signum, _frame):
         logging.info("Received SIGTERM signal")
         self.input_group_member.stop_consuming_threadsafe()
-        self.q1_group.close()
-        self.q2_group.close()
-        self.abstract_group.close()
 
     def _close(self):
-        for connection in (
-            self.input_group_member,
-            self.q1_group,
-            self.q2_group,
-            self.abstract_group,
-        ):
+        for resource in (self.input_group_member, self.q1_group, self.q2_group, self.abstract_group):
             try:
-                connection.close()
+                resource.close()
             except MessageMiddlewareCloseError as e:
                 logging.error(e)
 
@@ -120,6 +113,7 @@ class Parser:
         try:
             eof_message = message_protocol.internal.serialize_eof(client_id, ID)
             abstracts.send(eof_message)
+            logging.info("Sent EOF message to abstract group")
         except Exception:
             logging.exception("Error processing EOF message")
     
@@ -153,7 +147,6 @@ def main():
     logging.basicConfig(level=logging.INFO)
     logging.info("Starting parser service...")
     parser = Parser()
-    signal.signal(signal.SIGTERM, parser._handle_sigterm)
     parser.start()
     return 0
 
