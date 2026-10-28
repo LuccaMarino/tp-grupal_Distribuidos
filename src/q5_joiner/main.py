@@ -23,8 +23,8 @@ class Q5Joiner:
         self._sum_partial_length = GroupMember(MOM_HOST, SUM_PARTIAL_LENGTH_GROUP, ID)
         self._results_sender = GroupSender(MOM_HOST, RESULTS_GROUP, GATEWAY_AMOUNT)
         self._global_stats = {}  # client_id -> [total_words, total_articles]
-        self._received_word_sum_eofs = set()
-        self._received_word_counter_eofs = set()
+        self._received_word_sum_eofs = {}
+        self._received_word_counter_eofs = {}
         self._lock = threading.Lock()
         os.makedirs(STORAGE_PATH, exist_ok=True)
         signal.signal(signal.SIGTERM, self._handle_sigterm)
@@ -53,6 +53,7 @@ class Q5Joiner:
                     f.write(f"{url}\t{length}\n")
 
     def _process_articles_eof(self, client_id, sender_id):
+        logging.info(f"Received EOF from word sum {sender_id} for client {client_id}")
         with self._lock:
             if client_id not in self._received_word_sum_eofs:
                 self._received_word_sum_eofs[client_id] = set()
@@ -74,6 +75,7 @@ class Q5Joiner:
             self._global_stats[client_id][1] += articles
 
     def _process_sum_partial_length_eof(self, client_id, sender_id):
+        logging.info(f"Received EOF from {sender_id} for client {client_id}")
         with self._lock:
             if client_id not in self._received_word_counter_eofs:
                 self._received_word_counter_eofs[client_id] = set()
@@ -84,17 +86,17 @@ class Q5Joiner:
         total_words, total_articles = self._global_stats.get(client_id, [0, 0])
         old_articles_average = (total_words / total_articles) if total_articles > 0 else 0.0
         file_path = self._client_file_path(client_id)
-        with open(file_path, "r") as f:
-            for line in f:
-                url, length_str = line.strip().split("\t")
-                length = int(length_str)
-                if length > old_articles_average:
-                    result_message = message_protocol.internal.serialize_data(client_id, [url, length])
-                    self._results_sender.send(result_message)
+        if os.path.exists(file_path):
+            with open(file_path, "r") as f:
+                for line in f:
+                    url, length_str = line.strip().split("\t")
+                    length = int(length_str)
+                    if length > old_articles_average:
+                        result_message = message_protocol.internal.serialize_data(client_id, [url, length])
+                        self._results_sender.send(result_message)
+            os.remove(file_path)
         eof_message = message_protocol.internal.serialize_eof(client_id, f"q5_joiner_{ID}")
         self._results_sender.broadcast(eof_message)
-        if os.path.exists(file_path):
-            os.remove(file_path)
         self._global_stats.pop(client_id, None)
         self._received_word_sum_eofs.pop(client_id, None)
         self._received_word_counter_eofs.pop(client_id, None)
