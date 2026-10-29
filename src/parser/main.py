@@ -94,25 +94,26 @@ class Parser:
         #print(result)
         return result
 
-    def consume_article(self, client_id, article, q1, q2, abstracts):
+    def consume_article(self, client_id, article):
         try:
             article_fields = self.extract_article_fields(article)
             if article_fields.get("year") is not None and article_fields["year"] <= 2020 and article_fields.get("language") == "en" and article_fields.get("date_modified"):
-                q1.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q1, [article_fields["url"], article_fields["date_modified"]]))
-                #pass
+                self.q1_group.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q1, [article_fields["url"], article_fields["date_modified"]]))
             if article_fields["biography"] == True and article_fields.get("year") is not None and article_fields["year"] <= 2020 and article_fields.get("image_url"):
                 logging.info(f"SENDING biography article to q2: {article_fields['name']} ({article_fields['url']})")
-                q2.send(message_protocol.internal.serialize_data(client_id, [article_fields["name"], article_fields["url"], article_fields["image_url"]]))
+                self.q2_group.send(message_protocol.internal.serialize_data(client_id, [article_fields["name"], article_fields["url"], article_fields["image_url"]]))
             if article_fields.get("language") and article_fields.get("year") is not None and  article_fields.get("url") and article_fields.get("abstract"):
-                abstracts.send(message_protocol.internal.serialize_data(client_id, [[article_fields.get("language"), article_fields.get("year"), article_fields.get("url"), article_fields.get("abstract")]]))
-                #pass
+                self.abstract_group.send(message_protocol.internal.serialize_data(client_id, [[article_fields.get("language"), article_fields.get("year"), article_fields.get("url"), article_fields.get("abstract")]]))      
         except Exception:
             logging.exception("Error processing article message")
 
-    def consume_eof(self, client_id, abstracts):
+    def consume_eof(self, client_id):
         try:
+            eof_query_result = message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q1, ID)
+            self.q1_group.broadcast(eof_query_result)
             eof_message = message_protocol.internal.serialize_eof(client_id, ID)
-            abstracts.send(eof_message)
+            self.q2_group.broadcast(eof_message)
+            self.abstract_group.broadcast(eof_message)
             logging.info("Sent EOF message to abstract group")
         except Exception:
             logging.exception("Error processing EOF message")
@@ -121,14 +122,14 @@ class Parser:
         try:
             msg_type, client_id, args = message_protocol.internal.deserialize(message)
             if msg_type == message_protocol.internal.MsgType.EOF:
-                self.consume_eof(client_id, self.abstract_group)
+                self.consume_eof(client_id)
             elif msg_type == message_protocol.internal.MsgType.DATA:
                 if len(args) != 1 or not isinstance(args[0], list):
                     raise ValueError("Expected a list of articles in the parser input message")
                 for article in args[0]:
                     if not isinstance(article, dict):
                         raise ValueError("Expected each parser input article to be an object")
-                    self.consume_article(client_id, article, self.q1_group, self.q2_group, self.abstract_group)
+                    self.consume_article(client_id, article)
             else:
                 raise ValueError(f"Unexpected parser input message type: {msg_type}")
             ack()

@@ -38,13 +38,15 @@ class ImageDownloader:
         response.raise_for_status()
         return response.content
 
-    def consume_image(self, message, ack, _nack):
+    def consume_eof(self, client_id):
+        logging.info("Received EOF message")
+        eof_query_result = message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q2, ID)
+        self.output_group.broadcast(eof_query_result)
+        logging.info("Sent EOF message to output group")
+
+    def consume_image(self, client_id, fields):
         logging.info("Received image download request")
         try:
-            msg_type, client_id, fields = message_protocol.internal.deserialize(message)
-            if msg_type != message_protocol.internal.MsgType.DATA:
-                logging.error("Unexpected message type for image download request")
-                raise ValueError("Unexpected message type for image download request")
             for name, url, image_url in fields:
                 image_content = self.download_image(image_url)
                 image_content_b64 = base64.b64encode(image_content).decode("ascii")
@@ -54,11 +56,25 @@ class ImageDownloader:
             logging.warning("Downloading image failed for %s (%s): %s", url, image_url, e)
         except Exception:
             logging.exception("Error processing image download request")
-        ack()
+
+    def consume_message(self, message, ack, _nack):
+        try:
+            msg_type, client_id, fields = message_protocol.internal.deserialize(message)
+            if msg_type == message_protocol.internal.MsgType.EOF:
+                self.consume_eof(client_id)
+            elif msg_type == message_protocol.internal.MsgType.DATA:
+                self.consume_image(client_id, fields)
+            else:
+                logging.error("Unexpected message type for image download request")
+                raise ValueError("Unexpected message type for image download request")
+            ack()
+        except Exception:
+            logging.exception("Error processing image download request")
+            _nack()
 
     def start(self):
         try:
-            self.input_group_member.start_consuming(self.consume_image)
+            self.input_group_member.start_consuming(self.consume_message)
         finally:
             self._close()
 
