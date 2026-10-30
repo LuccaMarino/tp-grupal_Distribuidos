@@ -174,7 +174,7 @@ def main():
     client_lock = threading.Lock()
     sigterm_received = threading.Event()
     consumer_controller = ConsumerController()
-    response_handler_thread = threading.Thread(target=handle_client_response,args=(client_list,client_lock, consumer_controller),daemon=True)
+    response_handler_thread = threading.Thread(target=handle_client_response,args=(client_list,client_lock, consumer_controller,),daemon=True)
     response_handler_thread.start()
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
         server_socket.bind((SERVER_HOST, SERVER_PORT))

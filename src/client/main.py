@@ -112,7 +112,8 @@ class Client:
                     article
                 )
                 sent_count += 1
-                print(f"Articles sent: {sent_count} / {total_articles}")
+                if sent_count % 10000 == 0:
+                        print(f"(Articles sent to gateway {sent_count} / {total_articles} .")
         message_protocol.external.send_msg(
             self.server_socket,
             message_protocol.external.MsgType.END_OF_RECORDS
