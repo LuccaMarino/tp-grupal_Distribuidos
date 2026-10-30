@@ -10,7 +10,7 @@ from common import message_protocol
 
 SERVER_HOST = os.environ["SERVER_HOST"]
 SERVER_PORT = int(os.environ["SERVER_PORT"])
-INPUT_FILE = os.environ["INPUT_FILE"]
+INPUT_DIR = os.environ["INPUT_DIR"]
 OUTPUT_FILE_Q1 = os.environ["OUTPUT_FILE_Q1"]
 OUTPUT_FILE_Q2 = os.environ["OUTPUT_FILE_Q2"]
 OUTPUT_FILE_Q3 = os.environ["OUTPUT_FILE_Q3"]
@@ -99,27 +99,34 @@ class Client:
             self.closed.set()
             logging.info(f"ACKs received: {ack_count}")
 
-    def send_wikipedia_articles(self, input_file):
-        parquet_file = pq.ParquetFile(input_file)
-        total_articles = parquet_file.metadata.num_rows
-        print(f"Total articles to send: {total_articles}")
+    def send_wikipedia_articles(self, input_dir):
+        parquet_files = [
+            os.path.join(input_dir, f)
+            for f in os.listdir(input_dir)
+            if f.endswith(".parquet")
+        ]
         sent_count = 0
-        for batch in parquet_file.iter_batches(batch_size=500):
-            for article in batch.to_pylist():
-                message_protocol.external.send_msg(
-                    self.server_socket,
-                    message_protocol.external.MsgType.WIKI_ARTICLE,
-                    article
-                )
-                sent_count += 1
-                if sent_count % 10000 == 0:
-                        print(f"(Articles sent to gateway {sent_count} / {total_articles} .")
+        for parquet_file_path in parquet_files:
+            filename = os.path.basename(parquet_file_path)
+            parquet_file = pq.ParquetFile(parquet_file_path)
+            total_articles = parquet_file.metadata.num_rows
+            logging.info(f"Sending {total_articles} articles from {filename}...")
+            sent_count = 0
+            for batch in parquet_file.iter_batches(batch_size=500):
+                for article in batch.to_pylist():
+                    message_protocol.external.send_msg(
+                        self.server_socket,
+                        message_protocol.external.MsgType.WIKI_ARTICLE,
+                        article
+                    )
+                    sent_count += 1
+                    if sent_count % 10000 == 0:
+                            print(f"(Articles sent to gateway {sent_count} / {total_articles} .")
         message_protocol.external.send_msg(
             self.server_socket,
             message_protocol.external.MsgType.END_OF_RECORDS
         )
         logging.info("All articles sent. Waiting for final acknowledgment...")
-        # message_protocol.external.recv_msg(self.server_socket)
 
     def close_output_files(self):
         for output_file in self.output_files.values():
@@ -132,7 +139,7 @@ def main():
         client.connect(SERVER_HOST, SERVER_PORT)
         receiver = threading.Thread(target=client.receive_messages,daemon=True)
         receiver.start()
-        client.send_wikipedia_articles(INPUT_FILE)
+        client.send_wikipedia_articles(INPUT_DIR)
         receiver.join()
     except Exception as e:
         logging.error(f"An error occurred: {e}")
