@@ -284,7 +284,7 @@ services:
     container_name: client_0
     environment:
       <<: *client-env
-      INPUT_FILE: "/datasets/client_1.parquet"
+      INPUT_DIR: "/datasets/client_0"
       OUTPUT_FILE: "/output/client_0_output.parquet"
 
   # client_1:
@@ -292,7 +292,7 @@ services:
   #   container_name: client_1
   #   environment:
   #     <<: *client-env
-  #     INPUT_FILE: "/datasets/client_1.parquet"
+  #     INPUT_DIR: "/datasets/client_1"
   #     OUTPUT_FILE: "/output/client_1_output.parquet"
 
   # client_2:
@@ -300,7 +300,7 @@ services:
   #   container_name: client_2
   #   environment:
   #     <<: *client-env
-  #     INPUT_FILE: "/datasets/client_2.parquet"
+  #     INPUT_DIR: "/datasets/client_2"
   #     OUTPUT_FILE: "/output/client_2_output.parquet"
 
   # client_3:
@@ -308,7 +308,7 @@ services:
   #   container_name: client_3
   #   environment:
   #     <<: *client-env
-  #     INPUT_FILE: "/datasets/client_3.parquet"
+  #     INPUT_DIR: "/datasets/client_3"
   #     OUTPUT_FILE: "/output/client_3_output.parquet"
 
   # client_4:
@@ -316,7 +316,7 @@ services:
   #   container_name: client_4
   #   environment:
   #     <<: *client-env
-  #     INPUT_FILE: "/datasets/client_4.parquet"
+  #     INPUT_DIR: "/datasets/client_4"
   #     OUTPUT_FILE: "/output/client_4_output.parquet"
 
 volumes:

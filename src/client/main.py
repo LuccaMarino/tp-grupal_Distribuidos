@@ -9,7 +9,7 @@ from common import message_protocol
 
 SERVER_HOST = os.environ["SERVER_HOST"]
 SERVER_PORT = int(os.environ["SERVER_PORT"])
-INPUT_FILE = os.environ["INPUT_FILE"]
+INPUT_DIR = os.environ["INPUT_DIR"]
 OUTPUT_FILE = os.environ["OUTPUT_FILE"]
 RETRY_COUNT = int(os.environ["RETRY_COUNT"])
 DELAY_BETWEEN_RETRIES = int(os.environ["DELAY_BETWEEN_RETRIES"])
@@ -45,24 +45,34 @@ class Client:
             self.server_socket.close()
             self.server_socket = None
 
-    def send_wikipedia_articles(self, input_file):
-        parquet_file = pq.ParquetFile(input_file)
-        total_articles = parquet_file.metadata.num_rows
-        print(f"Total articles to send: {total_articles}")
-        ack_count = 0
-        for batch in parquet_file.iter_batches(batch_size=500):
-            for article in batch.to_pylist():
-                message_protocol.external.send_msg(
-                    self.server_socket,
-                    message_protocol.external.MsgType.WIKI_ARTICLE,
-                    article
-                )
-                message_protocol.external.recv_msg(self.server_socket)
-                ack_count += 1
-                if ack_count % 10000 == 0:
-                    print(f"ACK received from gateway for {ack_count} / {total_articles} articles.")
-        if ack_count % 10000 != 0:
-            print(f"ACK received from gateway for {ack_count} / {total_articles} articles.")
+    def send_wikipedia_articles(self, input_dir):
+        parquet_files = [
+            os.path.join(input_dir, f)
+            for f in os.listdir(input_dir)
+            if f.endswith(".parquet")
+        ]
+        total_articles_sent = 0
+        for parquet_file_path in parquet_files:
+            filename = os.path.basename(parquet_file_path)
+            parquet_file = pq.ParquetFile(parquet_file_path)
+            total_articles = parquet_file.metadata.num_rows
+            logging.info(f"Sending {total_articles} articles from {filename}...")
+            ack_count = 0
+            for batch in parquet_file.iter_batches(batch_size=500):
+                for article in batch.to_pylist():
+                    message_protocol.external.send_msg(
+                        self.server_socket,
+                        message_protocol.external.MsgType.WIKI_ARTICLE,
+                        article
+                    )
+                    message_protocol.external.recv_msg(self.server_socket)
+                    ack_count += 1
+                    total_articles_sent += 1
+                    if ack_count % 10000 == 0:
+                        print(f"({filename}) ACK received from gateway for {ack_count} / {total_articles} articles.")
+            if ack_count % 10000 != 0:
+                print(f"({filename}) ACK received from gateway for {ack_count} / {total_articles} articles.")
+        print(f"All {len(parquet_files)} parquet files processed. Total articles sent: {total_articles_sent}.")
         message_protocol.external.send_msg(
             self.server_socket,
             message_protocol.external.MsgType.END_OF_RECORDS
@@ -74,7 +84,7 @@ def main():
     client = Client()
     try:
         client.connect(SERVER_HOST, SERVER_PORT)
-        client.send_wikipedia_articles(INPUT_FILE)
+        client.send_wikipedia_articles(INPUT_DIR)
     except Exception as e:
         logging.error(f"An error occurred: {e}")
     finally:
