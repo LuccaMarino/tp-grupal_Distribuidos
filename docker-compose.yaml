@@ -152,6 +152,57 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  word_aggregator_0:
+    build:
+      context: ./src/
+      dockerfile: word_aggregator/Dockerfile
+    container_name: word_aggregator_0
+    environment:
+      ID: "0"
+      MOM_HOST: "rabbitmq"
+      INPUT_GROUP: "word_aggregators_group"
+      JOINER_GROUP: "word_joiner_group"
+      PARSER_AMOUNT: 3
+      WORD_SUM_AMOUNT: 1
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  word_aggregator_1:
+    build:
+      context: ./src/
+      dockerfile: word_aggregator/Dockerfile
+    container_name: word_aggregator_1
+    environment:
+      ID: "1"
+      MOM_HOST: "rabbitmq"
+      INPUT_GROUP: "word_aggregators_group"
+      JOINER_GROUP: "word_joiner_group"
+      PARSER_AMOUNT: 3
+      WORD_SUM_AMOUNT: 1
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  word_joiner_0:
+    build:
+      context: ./src/
+      dockerfile: word_joiner/Dockerfile
+    container_name: word_joiner_0
+    environment:
+      ID: "0"
+      MOM_HOST: "rabbitmq"
+      INPUT_GROUP: "word_joiner_group"
+      RESULTS_GROUP: "results_group"
+      GATEWAY_AMOUNT: 1
+      AGGREGATOR_AMOUNT: 2
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
   word_counter_0:
     build:
       context: ./src/
