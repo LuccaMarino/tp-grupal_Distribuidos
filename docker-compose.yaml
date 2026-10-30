@@ -29,6 +29,7 @@ services:
       SERVER_HOST: "gateway"
       SERVER_PORT: "5678"
       PARSER_AMOUNT: 3
+      IMAGE_DOWNLOADER_AMOUNT : 1
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -285,7 +286,11 @@ services:
     environment:
       <<: *client-env
       INPUT_FILE: "/datasets/client_1.parquet"
-      OUTPUT_FILE: "/output/client_0_output.parquet"
+      OUTPUT_FILE_Q1: "/output/client_0_output_q1.csv"
+      OUTPUT_FILE_Q2: "/output/client_0_output_q2.csv"
+      OUTPUT_FILE_Q3: "/output/client_0_output_q3.csv"
+      OUTPUT_FILE_Q4: "/output/client_0_output_q4.csv"
+      OUTPUT_FILE_Q5: "/output/client_0_output_q5.csv"
 
   # client_1:
   #   <<: *client-base

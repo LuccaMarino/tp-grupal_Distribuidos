@@ -35,7 +35,7 @@ class Client:
         self.csv_writers = {}
         for query, config in QUERY_OUTPUTS.items():
             output_file = open(config["path"],"w",encoding="utf-8",newline="",)
-            writer = csv.Writer(output_file)
+            writer = csv.writer(output_file)
             writer.writerow(config["fields"])
             self.output_files[query] = output_file
             self.csv_writers[query] = writer
@@ -72,10 +72,8 @@ class Client:
 
     def write_query_result(self, query, result):
         writer = self.csv_writers.get(query)
-
         if writer is None:
             raise ValueError(f"Unknown query: {query}")
-
         writer.writerow(result)
 
     def receive_messages(self):

@@ -187,8 +187,8 @@ def main():
                 connection = ClientConnection(client_socket, message_handler_instance)
                 with client_lock:
                     client_list.append(connection)
-                threading.Thread(target=handle_client_send, args=(connection), daemon=True).start()
-                threading.Thread(target=handle_client_request, args=(connection), daemon=True).start()
+                threading.Thread(target=handle_client_send, args=(connection,), daemon=True).start()
+                threading.Thread(target=handle_client_request, args=(connection,), daemon=True).start()
             except socket.error:
                 if sigterm_received.is_set():
                     logging.info("SIGTERM received. Shutting down the server...")
