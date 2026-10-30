@@ -63,9 +63,9 @@ services:
       OUTPUT_Q1: "results_group"
       OUTPUT_Q2: "images_group"
       OUTPUT_ABSTRACT: "abstracts_group"
-      GATEWAY_AMMOUNT: 1
-      IMAGE_DOWNLOADER_AMMOUNT: 1
-      WORD_SUM_AMMOUNT: 1
+      GATEWAY_AMOUNT: 1
+      IMAGE_DOWNLOADER_AMOUNT: 1
+      WORD_SUM_AMOUNT: 3
       PYTHONUNBUFFERED: "1"
     depends_on:
       gateway:
@@ -85,9 +85,9 @@ services:
       OUTPUT_Q1: "results_group"
       OUTPUT_Q2: "images_group"
       OUTPUT_ABSTRACT: "abstracts_group"
-      GATEWAY_AMMOUNT: 1
-      IMAGE_DOWNLOADER_AMMOUNT: 1
-      WORD_SUM_AMMOUNT: 1
+      GATEWAY_AMOUNT: 1
+      IMAGE_DOWNLOADER_AMOUNT: 1
+      WORD_SUM_AMOUNT: 3
       PYTHONUNBUFFERED: "1"
     depends_on:
       gateway:
@@ -107,9 +107,9 @@ services:
       OUTPUT_Q1: "results_group"
       OUTPUT_Q2: "images_group"
       OUTPUT_ABSTRACT: "abstracts_group"
-      GATEWAY_AMMOUNT: 1
-      IMAGE_DOWNLOADER_AMMOUNT: 1
-      WORD_SUM_AMMOUNT: 1
+      GATEWAY_AMOUNT: 1
+      IMAGE_DOWNLOADER_AMOUNT: 1
+      WORD_SUM_AMOUNT: 3
       PYTHONUNBUFFERED: "1"
     depends_on:
       gateway:
@@ -125,7 +125,7 @@ services:
     environment:
       ID: "0"
       MOM_HOST: "rabbitmq"
-      GATEWAY_AMMOUNT: 1
+      GATEWAY_AMOUNT: 1
       INPUT_GROUP: "images_group"
       OUTPUT_GROUP: "results_group"
     depends_on:
@@ -153,6 +153,44 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  word_sum_1:
+    build:
+      context: ./src/
+      dockerfile: word_sum/Dockerfile
+    container_name: word_sum_1
+    environment:
+      ID: "1"
+      MOM_HOST: "rabbitmq"
+      INPUT_GROUP: "abstracts_group"
+      AGGREGATOR_GROUP: "word_aggregators_group"
+      AGGREGATOR_AMOUNT: 2
+      WORD_COUNTER_GROUP: "word_counters_group"
+      WORD_COUNTER_AMOUNT: 3
+      Q5_JOINER_GROUP: "q5_joiner_group"
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  word_sum_2:
+    build:
+      context: ./src/
+      dockerfile: word_sum/Dockerfile
+    container_name: word_sum_2
+    environment:
+      ID: "2"
+      MOM_HOST: "rabbitmq"
+      INPUT_GROUP: "abstracts_group"
+      AGGREGATOR_GROUP: "word_aggregators_group"
+      AGGREGATOR_AMOUNT: 2
+      WORD_COUNTER_GROUP: "word_counters_group"
+      WORD_COUNTER_AMOUNT: 3
+      Q5_JOINER_GROUP: "q5_joiner_group"
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
   word_aggregator_0:
     build:
       context: ./src/
@@ -164,7 +202,7 @@ services:
       INPUT_GROUP: "word_aggregators_group"
       JOINER_GROUP: "word_joiner_group"
       PARSER_AMOUNT: 3
-      WORD_SUM_AMOUNT: 1
+      WORD_SUM_AMOUNT: 3
       PYTHONUNBUFFERED: "1"
     depends_on:
       rabbitmq:
@@ -181,7 +219,7 @@ services:
       INPUT_GROUP: "word_aggregators_group"
       JOINER_GROUP: "word_joiner_group"
       PARSER_AMOUNT: 3
-      WORD_SUM_AMOUNT: 1
+      WORD_SUM_AMOUNT: 3
       PYTHONUNBUFFERED: "1"
     depends_on:
       rabbitmq:
@@ -215,8 +253,8 @@ services:
       INPUT_GROUP: "word_counters_group"
       SUM_PARTIAL_LENGTH_GROUP: "sum_partial_length_group"
       Q5_JOINER_AMOUNT: 1
-      # EXPECTED_EOFS = PARSER_AMOUNT (3) * WORD_SUM_AMOUNT (1)
-      EXPECTED_EOFS: 3
+      # EXPECTED_EOFS = PARSER_AMOUNT (3) * WORD_SUM_AMOUNT (3)
+      EXPECTED_EOFS: 9
       PYTHONUNBUFFERED: "1"
     depends_on:
       rabbitmq:
@@ -233,8 +271,8 @@ services:
       INPUT_GROUP: "word_counters_group"
       SUM_PARTIAL_LENGTH_GROUP: "sum_partial_length_group"
       Q5_JOINER_AMOUNT: 1
-      # EXPECTED_EOFS = PARSER_AMOUNT (3) * WORD_SUM_AMOUNT (1)
-      EXPECTED_EOFS: 3
+      # EXPECTED_EOFS = PARSER_AMOUNT (3) * WORD_SUM_AMOUNT (3)
+      EXPECTED_EOFS: 9
       PYTHONUNBUFFERED: "1"
     depends_on:
       rabbitmq:
@@ -251,8 +289,8 @@ services:
       INPUT_GROUP: "word_counters_group"
       SUM_PARTIAL_LENGTH_GROUP: "sum_partial_length_group"
       Q5_JOINER_AMOUNT: 1
-      # EXPECTED_EOFS = PARSER_AMOUNT (3) * WORD_SUM_AMOUNT (1)
-      EXPECTED_EOFS: 3
+      # EXPECTED_EOFS = PARSER_AMOUNT (3) * WORD_SUM_AMOUNT (3)
+      EXPECTED_EOFS: 9
       PYTHONUNBUFFERED: "1"
     depends_on:
       rabbitmq:
@@ -271,7 +309,7 @@ services:
       NEW_ARTICLES_GROUP: "q5_joiner_group"
       SUM_PARTIAL_LENGTH_GROUP: "sum_partial_length_group"
       RESULTS_GROUP: "results_group"
-      EXPECTED_WORDSUM_EOFS: 3 # PARSER_AMOUNT (3) * WORD_SUM_AMOUNT (1)
+      EXPECTED_WORDSUM_EOFS: 9 # PARSER_AMOUNT (3) * WORD_SUM_AMOUNT (3)
       EXPECTED_WORDCOUNTER_EOFS: 3 # WORD_COUNTER_AMOUNT (3)
       GATEWAY_AMOUNT: 1
       STORAGE_PATH: "/new_articles"
@@ -297,32 +335,48 @@ services:
   #   container_name: client_1
   #   environment:
   #     <<: *client-env
+  #     OUTPUT_FILE_Q1: "/output/client_1_output_q1.csv"
+  #     OUTPUT_FILE_Q2: "/output/client_1_output_q2.csv"
+  #     OUTPUT_FILE_Q3: "/output/client_1_output_q3.csv"
+  #     OUTPUT_FILE_Q4: "/output/client_1_output_q4.csv"
+  #     OUTPUT_FILE_Q5: "/output/client_1_output_q5.csv"
   #     INPUT_DIR: "/datasets/client_1"
-  #     OUTPUT_FILE: "/output/client_1_output.parquet"
 
   # client_2:
   #   <<: *client-base
   #   container_name: client_2
   #   environment:
   #     <<: *client-env
+  #     OUTPUT_FILE_Q1: "/output/client_2_output_q1.csv"
+  #     OUTPUT_FILE_Q2: "/output/client_2_output_q2.csv"
+  #     OUTPUT_FILE_Q3: "/output/client_2_output_q3.csv"
+  #     OUTPUT_FILE_Q4: "/output/client_2_output_q4.csv"
+  #     OUTPUT_FILE_Q5: "/output/client_2_output_q5.csv"
   #     INPUT_DIR: "/datasets/client_2"
-  #     OUTPUT_FILE: "/output/client_2_output.parquet"
 
   # client_3:
   #   <<: *client-base
   #   container_name: client_3
   #   environment:
   #     <<: *client-env
+  #     OUTPUT_FILE_Q1: "/output/client_3_output_q1.csv"
+  #     OUTPUT_FILE_Q2: "/output/client_3_output_q2.csv"
+  #     OUTPUT_FILE_Q3: "/output/client_3_output_q3.csv"
+  #     OUTPUT_FILE_Q4: "/output/client_3_output_q4.csv"
+  #     OUTPUT_FILE_Q5: "/output/client_3_output_q5.csv"
   #     INPUT_DIR: "/datasets/client_3"
-  #     OUTPUT_FILE: "/output/client_3_output.parquet"
 
   # client_4:
   #   <<: *client-base
   #   container_name: client_4
   #   environment:
   #     <<: *client-env
+  #     OUTPUT_FILE_Q1: "/output/client_4_output_q1.csv"
+  #     OUTPUT_FILE_Q2: "/output/client_4_output_q2.csv"
+  #     OUTPUT_FILE_Q3: "/output/client_4_output_q3.csv"
+  #     OUTPUT_FILE_Q4: "/output/client_4_output_q4.csv"
+  #     OUTPUT_FILE_Q5: "/output/client_4_output_q5.csv"
   #     INPUT_DIR: "/datasets/client_4"
-  #     OUTPUT_FILE: "/output/client_4_output.parquet"
 
 volumes:
   q5_joiner_new_articles:

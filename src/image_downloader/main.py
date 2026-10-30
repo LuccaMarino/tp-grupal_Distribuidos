@@ -10,7 +10,7 @@ MOM_HOST = os.environ["MOM_HOST"]
 INPUT_GROUP = os.environ["INPUT_GROUP"]
 OUTPUT_GROUP = os.environ["OUTPUT_GROUP"]
 ID = os.environ["ID"]
-GATEWAY_AMMOUNT = int(os.environ["GATEWAY_AMMOUNT"])
+GATEWAY_AMOUNT = int(os.environ["GATEWAY_AMOUNT"])
 USER_AGENT = (
     "ImageDownloaderTP/"
     "0.1 (FIUBA Sistemas Distribuidos)"
@@ -18,7 +18,7 @@ USER_AGENT = (
 
 class ImageDownloader:
     def __init__(self):
-        self.output_group = GroupSender(MOM_HOST, OUTPUT_GROUP, GATEWAY_AMMOUNT)
+        self.output_group = GroupSender(MOM_HOST, OUTPUT_GROUP, GATEWAY_AMOUNT)
         self.input_group_member = GroupMember(MOM_HOST, INPUT_GROUP, int(ID))
         signal.signal(signal.SIGTERM, self._handle_sigterm)
 

@@ -14,17 +14,17 @@ INPUT_GROUP = os.environ["INPUT_GROUP"]
 OUTPUT_Q1 = os.environ["OUTPUT_Q1"]
 OUTPUT_Q2 = os.environ["OUTPUT_Q2"]
 OUTPUT_ABSTRACT = os.environ["OUTPUT_ABSTRACT"]
-GATEWAY_AMMOUNT = int(os.environ["GATEWAY_AMMOUNT"])
-SUM_AMMOUNT = int(os.environ["WORD_SUM_AMMOUNT"])
-IMAGE_DOWNLOADER_AMMOUNT = int(os.environ["IMAGE_DOWNLOADER_AMMOUNT"])
+GATEWAY_AMOUNT = int(os.environ["GATEWAY_AMOUNT"])
+SUM_AMOUNT = int(os.environ["WORD_SUM_AMOUNT"])
+IMAGE_DOWNLOADER_AMOUNT = int(os.environ["IMAGE_DOWNLOADER_AMOUNT"])
 
 
 class Parser:
 
     def __init__(self):
-        self.q1_group = GroupSender(MOM_HOST, OUTPUT_Q1, GATEWAY_AMMOUNT)
-        self.q2_group = GroupSender(MOM_HOST, OUTPUT_Q2, IMAGE_DOWNLOADER_AMMOUNT)
-        self.abstract_group = GroupSender(MOM_HOST, OUTPUT_ABSTRACT, SUM_AMMOUNT)
+        self.q1_group = GroupSender(MOM_HOST, OUTPUT_Q1, GATEWAY_AMOUNT)
+        self.q2_group = GroupSender(MOM_HOST, OUTPUT_Q2, IMAGE_DOWNLOADER_AMOUNT)
+        self.abstract_group = GroupSender(MOM_HOST, OUTPUT_ABSTRACT, SUM_AMOUNT)
         self.input_group_member = GroupMember(MOM_HOST, INPUT_GROUP, int(ID))
         signal.signal(signal.SIGTERM, self._handle_sigterm)
 
