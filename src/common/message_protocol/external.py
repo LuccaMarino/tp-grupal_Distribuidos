@@ -1,7 +1,7 @@
 from asyncio import IncompleteReadError
 from datetime import datetime
 from . import external_serializer
-
+import json
 class MsgType:
     """
     Enum-like class for message types.
@@ -54,10 +54,25 @@ def _recv_empty(socket):
     """
     return None
 
+def _recv_query_result(sock):
+    query = external_serializer.deserialize_uint32(
+        _recv_sized(sock, external_serializer.UINT32_SIZE)
+    )
+    result_json = external_serializer.deserialize_string(sock, _recv_sized)
+    return query, json.loads(result_json)
+
+
+def _recv_end_of_query_results(socket):
+    return external_serializer.deserialize_uint32(
+        _recv_sized(socket, external_serializer.UINT32_SIZE)
+    )
+
 RECV_MSG_HANDLERS = {
     MsgType.WIKI_ARTICLE: _recv_wiki_article,
     MsgType.END_OF_RECORDS: _recv_empty,
     MsgType.ACK: _recv_empty,
+    MsgType.QUERY_RESULT: _recv_query_result,
+    MsgType.END_OF_QUERY_RESULTS: _recv_end_of_query_results
 }
 """
     A dictionary mapping message types to their corresponding handler functions for receiving messages. Each message type is associated with a function that knows how to deserialize the message from the socket.
@@ -130,10 +145,21 @@ def _send_ack(socket):
     """
     socket.sendall(external_serializer.serialize_uint32(MsgType.ACK))
 
+def _send_query_result(sock, query, result):
+    query_bytes = external_serializer.serialize_uint32(query)
+    result_json = json.dumps(result, ensure_ascii=False)
+    result_bytes = external_serializer.serialize_string(result_json)
+    sock.sendall( external_serializer.serialize_uint32(MsgType.QUERY_RESULT) + query_bytes + result_bytes)
+
+def _send_end_of_query_results(sock, query):
+    sock.sendall(external_serializer.serialize_uint32(MsgType.END_OF_QUERY_RESULTS) + external_serializer.serialize_uint32(query))
+
 SEND_MSG_HANDLERS = {
     MsgType.WIKI_ARTICLE: _send_wiki_article,
     MsgType.END_OF_RECORDS: _send_end_of_records,
     MsgType.ACK: _send_ack,
+    MsgType.QUERY_RESULT: _send_query_result,
+    MsgType.END_OF_QUERY_RESULTS: _send_end_of_query_results
 }
 """
     A dictionary mapping message types to their corresponding handler functions for sending messages. Each message type is associated with a function that knows how to serialize and send the message to the socket.
