@@ -29,7 +29,7 @@ services:
       SERVER_HOST: "gateway"
       SERVER_PORT: "5678"
       PARSER_AMOUNT: 3
-      IMAGE_DOWNLOADER_AMOUNT : 1
+      IMAGE_DOWNLOADER_AMOUNT : 2
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -64,7 +64,7 @@ services:
       OUTPUT_Q2: "images_group"
       OUTPUT_ABSTRACT: "abstracts_group"
       GATEWAY_AMOUNT: 1
-      IMAGE_DOWNLOADER_AMOUNT: 1
+      IMAGE_DOWNLOADER_AMOUNT: 2
       WORD_SUM_AMOUNT: 3
       PYTHONUNBUFFERED: "1"
     depends_on:
@@ -86,7 +86,7 @@ services:
       OUTPUT_Q2: "images_group"
       OUTPUT_ABSTRACT: "abstracts_group"
       GATEWAY_AMOUNT: 1
-      IMAGE_DOWNLOADER_AMOUNT: 1
+      IMAGE_DOWNLOADER_AMOUNT: 2
       WORD_SUM_AMOUNT: 3
       PYTHONUNBUFFERED: "1"
     depends_on:
@@ -108,7 +108,7 @@ services:
       OUTPUT_Q2: "images_group"
       OUTPUT_ABSTRACT: "abstracts_group"
       GATEWAY_AMOUNT: 1
-      IMAGE_DOWNLOADER_AMOUNT: 1
+      IMAGE_DOWNLOADER_AMOUNT: 2
       WORD_SUM_AMOUNT: 3
       PYTHONUNBUFFERED: "1"
     depends_on:
@@ -128,6 +128,46 @@ services:
       GATEWAY_AMOUNT: 1
       INPUT_GROUP: "images_group"
       OUTPUT_GROUP: "results_group"
+      MAX_RETRIES: 4
+      RETRY_DELAY: 1
+    depends_on:
+      parser_0:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
+  image_downloader_1:
+    build:
+      context: ./src/
+      dockerfile: image_downloader/Dockerfile
+    container_name: image_downloader_1
+    environment:
+      ID: "1"
+      MOM_HOST: "rabbitmq"
+      GATEWAY_AMOUNT: 1
+      INPUT_GROUP: "images_group"
+      OUTPUT_GROUP: "results_group"
+      MAX_RETRIES: 4
+      RETRY_DELAY: 1
+    depends_on:
+      parser_0:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
+  image_downloader_2:
+    build:
+      context: ./src/
+      dockerfile: image_downloader/Dockerfile
+    container_name: image_downloader_2
+    environment:
+      ID: "2"
+      MOM_HOST: "rabbitmq"
+      GATEWAY_AMOUNT: 1
+      INPUT_GROUP: "images_group"
+      OUTPUT_GROUP: "results_group"
+      MAX_RETRIES: 4
+      RETRY_DELAY: 1
     depends_on:
       parser_0:
         condition: service_started

@@ -10,8 +10,8 @@ import time
 MOM_HOST = os.environ["MOM_HOST"]
 INPUT_GROUP = os.environ["INPUT_GROUP"]
 OUTPUT_GROUP = os.environ["OUTPUT_GROUP"]
-MAX_RETRIES = int(os.environ.get("MAX_RETRIES", 3))
-RETRY_DELAY = float(os.environ.get("RETRY_DELAY", 2))
+MAX_RETRIES = int(os.environ.get("MAX_RETRIES"))
+RETRY_DELAY = float(os.environ.get("RETRY_DELAY"))
 ID = os.environ["ID"]
 GATEWAY_AMOUNT = int(os.environ["GATEWAY_AMOUNT"])
 USER_AGENT = (
@@ -47,17 +47,18 @@ class ImageDownloader:
                 if status_code not in {429, 500, 502, 503, 504}:
                     logging.error("ERROR for URL %s: HTTP status code %d", url, status_code)
                     return False, "ERROR for URL {}: HTTP status code {}".format(url, status_code)
-                if attempt == MAX_RETRIES:
+                if attempt == (MAX_RETRIES - 1 ):
                     logging.error("Max retries exceeded for URL %s", url)
                     return False, "ERROR for URL " + url + ": HTTP max retries exceeded"
                 delay = RETRY_DELAY * (2 ** attempt)
-            except (requests.Timeout, requests.ConnectionError):
-                if attempt == MAX_RETRIES:
+            except requests.Timeout:
+                if attempt == (MAX_RETRIES - 1 ):
                     logging.error("Max retries exceeded for URL %s", url)
                     return False, "ERROR for URL " + url + ": HTTP max retries exceeded"
                 delay = RETRY_DELAY * (2 ** attempt)
-            time.sleep(delay) 
-        raise Exception("Failed to download image after {} attempts".format(MAX_RETRIES))
+            if attempt < MAX_RETRIES - 1:
+                time.sleep(delay) 
+        return False, "Failed to download {url} after {} attempts".format(MAX_RETRIES)
 
     def consume_eof(self, client_id, sender):
         logging.info("Received EOF message")
