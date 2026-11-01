@@ -26,6 +26,7 @@ class Parser:
         self.q2_group = GroupSender(MOM_HOST, OUTPUT_Q2, IMAGE_DOWNLOADER_AMOUNT)
         self.abstract_group = GroupSender(MOM_HOST, OUTPUT_ABSTRACT, SUM_AMOUNT)
         self.input_group_member = GroupMember(MOM_HOST, INPUT_GROUP, int(ID))
+        self.q2_sent = 0
         signal.signal(signal.SIGTERM, self._handle_sigterm)
 
     def _handle_sigterm(self, _signum, _frame):
@@ -100,8 +101,10 @@ class Parser:
             if article_fields.get("year") is not None and article_fields["year"] <= 2020 and article_fields.get("language") == "en" and article_fields.get("date_modified"):
                 self.q1_group.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q1, [article_fields["url"], article_fields["date_modified"]]))
             if article_fields["biography"] == True and article_fields.get("year") is not None and article_fields["year"] <= 2020 and article_fields.get("image_url"):
-                logging.info(f"SENDING biography article to q2: {article_fields['name']} ({article_fields['url']})")
+                #logging.info(f"SENDING biography article to q2: {article_fields['name']} ({article_fields['url']})")
                 self.q2_group.send(message_protocol.internal.serialize_data(client_id, [article_fields["name"], article_fields["url"], article_fields["image_url"]]))
+                self.q2_sent += 1
+                logging.info("Q2_SENT count=%d name=%s",self.q2_sent,article_fields["name"])
             if article_fields.get("language") and article_fields.get("year") is not None and  article_fields.get("url") and article_fields.get("abstract"):
                 self.abstract_group.send(message_protocol.internal.serialize_data(client_id, [[article_fields.get("language"), article_fields.get("year"), article_fields.get("url"), article_fields.get("abstract")]]))      
         except Exception:

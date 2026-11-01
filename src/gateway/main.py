@@ -73,7 +73,7 @@ def handle_client_request(connection):
 def delete_condition_ready(client_id, ended_querys):
     if not ended_querys[client_id].get(message_protocol.internal.Query.Q2) or not ended_querys[client_id].get(message_protocol.internal.Query.Q1):
         return False
-    return (len(ended_querys[client_id][message_protocol.internal.Query.Q2]) == IMAGE_DOWNLOADER_AMOUNT
+    return (len(ended_querys[client_id][message_protocol.internal.Query.Q2]) == IMAGE_DOWNLOADER_AMOUNT * PARSER_AMOUNT
             and len(ended_querys[client_id][message_protocol.internal.Query.Q1]) == PARSER_AMOUNT)
 
 
@@ -86,7 +86,7 @@ def handle_query_eof(outgoing, ended_querys, client_id, query, sender_id):
         ended_querys[client_id][query].add(sender_id)
         if query == message_protocol.internal.Query.Q1 and len(ended_querys[client_id][query]) == PARSER_AMOUNT:
             outgoing.put((message_protocol.external.MsgType.END_OF_QUERY_RESULTS,query))
-        if query == message_protocol.internal.Query.Q2 and len(ended_querys[client_id][query]) == IMAGE_DOWNLOADER_AMOUNT:
+        if query == message_protocol.internal.Query.Q2 and len(ended_querys[client_id][query]) == (IMAGE_DOWNLOADER_AMOUNT * PARSER_AMOUNT):
             outgoing.put((message_protocol.external.MsgType.END_OF_QUERY_RESULTS,query))
         if delete_condition_ready(client_id, ended_querys):
             del ended_querys[client_id]
