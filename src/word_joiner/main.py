@@ -52,7 +52,7 @@ class WordJoiner:
         elif query == message_protocol.internal.Query.Q4:
             if client_id not in self._tops_by_client:
                 self._tops_by_client[client_id] = []
-            current_top = self._tops_by_client.get(client_id, [])
+            current_top = self._tops_by_client[client_id]
             self._tops_by_client[client_id] = self._top_words(current_top + records)
         else:
             logging.error(f"Discarding result of unexpected query {query}")
