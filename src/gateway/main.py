@@ -1,8 +1,9 @@
 import logging
-import multiprocessing
 import os
 import signal
 import socket
+import queue
+import threading
 
 from common.middleware import GroupSender, GroupMember
 import message_handler
@@ -14,29 +15,51 @@ OUTPUT_GROUP = os.environ["OUTPUT_GROUP"]
 SERVER_HOST = os.environ["SERVER_HOST"]
 SERVER_PORT = int(os.environ["SERVER_PORT"])
 PARSER_AMOUNT = int(os.environ["PARSER_AMOUNT"])
+IMAGE_DOWNLOADER_AMOUNT = int(os.environ["IMAGE_DOWNLOADER_AMOUNT"])
 GATEWAY_ID = 0 #Por ahora solo tenemos un gateway
 
-def handle_client_request(client_socket, message_handler: message_handler.MessageHandler):
-    output_group = GroupSender(MOM_HOST, OUTPUT_GROUP, PARSER_AMOUNT)
+class ClientConnection:
+    def __init__(self, client_socket, message_handler):
+        self.socket = client_socket
+        self.message_handler = message_handler
+        self.outgoing = queue.Queue()
+        self.closed = threading.Event()
 
+class ConsumerController:
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._member = None
+        self._stop_requested = False
+
+    def register(self, member):
+        with self._lock:
+            self._member = member
+            should_stop = self._stop_requested
+        if should_stop:
+            member.stop_consuming_threadsafe()
+
+    def request_stop(self):
+        with self._lock:
+            self._stop_requested = True
+            member = self._member
+        if member is not None:
+            member.stop_consuming_threadsafe()
+
+def handle_client_request(connection):
+    output_group = GroupSender(MOM_HOST, OUTPUT_GROUP, PARSER_AMOUNT)
+    client_socket = connection.socket
     try:
         while True:
             msg_type, data = message_protocol.external.recv_msg(client_socket)
             if msg_type == message_protocol.external.MsgType.WIKI_ARTICLE:
-                serialized_message = message_handler.serialize_article_message(data)
+                serialized_message = connection.message_handler.serialize_article_message(data)
                 output_group.send(serialized_message)
-                message_protocol.external.send_msg(
-                    client_socket,
-                    message_protocol.external.MsgType.ACK
-                )
+                connection.outgoing.put((message_protocol.external.MsgType.ACK, None))
             elif msg_type == message_protocol.external.MsgType.END_OF_RECORDS:
                 logging.info("Received end of records signal.")
-                serialized_message = message_handler.serialize_eof_message(data)
+                serialized_message = connection.message_handler.serialize_eof_message(data)
                 output_group.broadcast(serialized_message)
-                message_protocol.external.send_msg(
-                    client_socket,
-                    message_protocol.external.MsgType.ACK
-                )
+                connection.outgoing.put((message_protocol.external.MsgType.ACK, None))
                 return
     except socket.error:
         logging.error("The connection with the client was lost.")
@@ -46,26 +69,52 @@ def handle_client_request(client_socket, message_handler: message_handler.Messag
         ...
         output_group.close()
 
-def handle_client_response(client_list):
-    input_group = GroupMember(MOM_HOST, INPUT_GROUP, GATEWAY_ID)
 
+def delete_condition_ready(client_id, ended_querys):
+    if not ended_querys[client_id].get(message_protocol.internal.Query.Q2) or not ended_querys[client_id].get(message_protocol.internal.Query.Q1):
+        return False
+    return (len(ended_querys[client_id][message_protocol.internal.Query.Q2]) == IMAGE_DOWNLOADER_AMOUNT * PARSER_AMOUNT
+            and len(ended_querys[client_id][message_protocol.internal.Query.Q1]) == PARSER_AMOUNT)
+
+
+def handle_query_eof(outgoing, ended_querys, client_id, query, sender_id):
+    if client_id not in ended_querys:
+        ended_querys[client_id] = {}
+    if query == message_protocol.internal.Query.Q1 or query == message_protocol.internal.Query.Q2:
+        if query not in ended_querys[client_id]:
+            ended_querys[client_id][query] = set()
+        ended_querys[client_id][query].add(sender_id)
+        if query == message_protocol.internal.Query.Q1 and len(ended_querys[client_id][query]) == PARSER_AMOUNT:
+            outgoing.put((message_protocol.external.MsgType.END_OF_QUERY_RESULTS,query))
+        if query == message_protocol.internal.Query.Q2 and len(ended_querys[client_id][query]) == (IMAGE_DOWNLOADER_AMOUNT * PARSER_AMOUNT):
+            outgoing.put((message_protocol.external.MsgType.END_OF_QUERY_RESULTS,query))
+        if delete_condition_ready(client_id, ended_querys):
+            del ended_querys[client_id]
+    else:
+        outgoing.put((message_protocol.external.MsgType.END_OF_QUERY_RESULTS,query))
+
+
+def handle_client_response(client_list, client_lock, consumer_controller):
+    input_group = GroupMember(MOM_HOST, INPUT_GROUP, GATEWAY_ID)
+    ended_querys = {}
     def _consume_result(message, ack, nack):
         # SHOULD DELIVER QUERY RESULTS TO CLIENTS ON THE GO, AND HANDLE END OF RESULTS.
         client_index = 0
         try:
-            for [message_handler_instance, client_socket] in client_list:
-                deserialized_message = message_handler_instance.deserialize_result_message(message)
-                if not deserialized_message:
-                    client_index += 1
-                    continue
-                message_protocol.external.send_msg(
-                    client_socket,
-                    message_protocol.external.MsgType.QUERY_RESULT,
-                    deserialized_message
-                )
-                message_protocol.external.recv_msg(client_socket)
-                break
-            client_list.pop(client_index)
+            with client_lock:
+                for connection in client_list:
+                    deserialized_message = connection.message_handler.deserialize_result_message(message)
+                    if not deserialized_message:
+                        client_index += 1
+                        continue
+                    type_message, client_id, fields = deserialized_message
+                    if type_message == message_protocol.internal.MsgType.QUERY_EOF:
+                        query, sender_id = fields
+                        handle_query_eof(connection.outgoing, ended_querys, client_id, query, sender_id)
+                    else:
+                        query, records = fields
+                        connection.outgoing.put((message_protocol.external.MsgType.QUERY_RESULT, (query, records)))
+                    break
             ack()
         except socket.error:
             logging.error("The connection with the client was lost.")
@@ -73,44 +122,83 @@ def handle_client_response(client_list):
             nack()
         except Exception as e:
             logging.error(e)
-            nack()
+            ack()
             input_group.stop_consuming()
+    try:
+        consumer_controller.register(input_group)
+        input_group.start_consuming(_consume_result)
+    except Exception:
+        logging.exception("Error en Rabbit")
+    finally:
+        try:
+            input_group.close()
+        except Exception:
+            logging.exception("Error closing Rabbit consumer")
 
-    input_group.start_consuming(_consume_result)
-    input_group.close()
+def handle_client_send(connection):
+    try:
+        while True:
+            message = connection.outgoing.get()
+            if message is None:
+                break
+            msg_type, data = message
+            if msg_type == message_protocol.external.MsgType.QUERY_RESULT:
+                query, result = data
+                message_protocol.external.send_msg(connection.socket, msg_type, query, result)
+            elif msg_type == message_protocol.external.MsgType.END_OF_QUERY_RESULTS:
+                message_protocol.external.send_msg(connection.socket, msg_type, data)
+            else:
+                message_protocol.external.send_msg(connection.socket, msg_type)
+    except socket.error:
+        logging.error("Connection with the client was lost")
+    finally:
+        connection.closed.set()
 
-def handle_sigterm(server_socket, client_list, sigterm_received):
-    server_socket.shutdown(socket.SHUT_RDWR)
-    for client_socket in list(client_list):
-        client_socket.shutdown(socket.SHUT_RDWR)
-    sigterm_received.value = 1
+def handle_sigterm(server_socket, client_list, client_lock, sigterm_received):
+    try:
+        server_socket.shutdown(socket.SHUT_RDWR)
+    except:
+        pass
+    sigterm_received.set()
+    with client_lock:
+        for connection in client_list:
+            try:
+                connection.socket.shutdown(socket.SHUT_RDWR)
+                connection.closed.set()
+                connection.outgoing.put(None)
+            except:
+                pass
 
 def main():
-    with multiprocessing.Manager() as manager:
-        client_list = manager.list()
-        sigterm_received = manager.Value('c_short', 0)
-        with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
-            # pool.apply_async(handle_client_response, args=(client_list,))
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
-                server_socket.bind((SERVER_HOST, SERVER_PORT))
-                server_socket.listen()
-                signal.signal(signal.SIGTERM, lambda signum, frame: handle_sigterm(server_socket, client_list, sigterm_received))
-                while True:
-                    try:
-                        client_socket, _ = server_socket.accept()
-                        message_handler_instance = message_handler.MessageHandler()
-                        client_list.append([message_handler_instance, client_socket])
-                        pool.apply_async(handle_client_request, (client_socket, message_handler_instance),)
-                    except socket.error:
-                        if sigterm_received.value == 0:
-                            logging.error("The connection with the client was lost.")
-                            return 1
-                        else:
-                            logging.info("SIGTERM received. Shutting down the server...")
-                            return 0
-                    except Exception as e:
-                        logging.error(f"An error occurred: {e}")
+    client_list = []
+    client_lock = threading.Lock()
+    sigterm_received = threading.Event()
+    consumer_controller = ConsumerController()
+    response_handler_thread = threading.Thread(target=handle_client_response,args=(client_list,client_lock, consumer_controller,),daemon=True)
+    response_handler_thread.start()
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+        server_socket.bind((SERVER_HOST, SERVER_PORT))
+        server_socket.listen()
+        signal.signal(signal.SIGTERM, lambda signum, frame: handle_sigterm(server_socket, client_list, client_lock, sigterm_received))
+        while True:
+            try:
+                client_socket, _ = server_socket.accept()
+                message_handler_instance = message_handler.MessageHandler()
+                connection = ClientConnection(client_socket, message_handler_instance)
+                with client_lock:
+                    client_list.append(connection)
+                threading.Thread(target=handle_client_send, args=(connection,), daemon=True).start()
+                threading.Thread(target=handle_client_request, args=(connection,), daemon=True).start()
+            except socket.error:
+                if sigterm_received.is_set():
+                    logging.info("SIGTERM received. Shutting down the server...")
+                    break                    
+            except Exception as e:
+                logging.error(f"An error occurred: {e}")
+    consumer_controller.request_stop()
+    response_handler_thread.join()
     return 0
+
 
 if __name__ == "__main__":
     main()
