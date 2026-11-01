@@ -10,7 +10,7 @@ import time
 MOM_HOST = os.environ["MOM_HOST"]
 INPUT_GROUP = os.environ["INPUT_GROUP"]
 OUTPUT_GROUP = os.environ["OUTPUT_GROUP"]
-MAX_RETRIES = int(os.environ.get("MAX_RETRIES", 4))
+MAX_RETRIES = int(os.environ.get("MAX_RETRIES", 3))
 RETRY_DELAY = float(os.environ.get("RETRY_DELAY", 2))
 ID = os.environ["ID"]
 GATEWAY_AMOUNT = int(os.environ["GATEWAY_AMOUNT"])
@@ -61,7 +61,8 @@ class ImageDownloader:
 
     def consume_eof(self, client_id, sender):
         logging.info("Received EOF message")
-        eof_query_result = message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q2, (ID,sender))
+        sender_id = f"{ID},{sender}"
+        eof_query_result = message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q2, sender_id)
         self.output_group.broadcast(eof_query_result)
         logging.info("Sent EOF message to output group")
 
