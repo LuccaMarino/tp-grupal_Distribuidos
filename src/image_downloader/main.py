@@ -46,19 +46,19 @@ class ImageDownloader:
                 status_code = e.response.status_code
                 if status_code not in {429, 500, 502, 503, 504}:
                     logging.error("ERROR for URL %s: HTTP status code %d", url, status_code)
-                    return False, "ERROR for URL {}: HTTP status code {}".format(url, status_code)
+                    return False, "ERROR: HTTP Error"
                 if attempt == (MAX_RETRIES - 1 ):
                     logging.error("Max retries exceeded for URL %s", url)
-                    return False, "ERROR for URL " + url + ": HTTP max retries exceeded"
+                    return False, "ERROR: HTTP max retries exceeded"
                 delay = RETRY_DELAY * (2 ** attempt)
             except requests.Timeout:
                 if attempt == (MAX_RETRIES - 1 ):
                     logging.error("Max retries exceeded for URL %s", url)
-                    return False, "ERROR for URL " + url + ": HTTP max retries exceeded"
+                    return False, "ERROR: HTTP max retries exceeded"
                 delay = RETRY_DELAY * (2 ** attempt)
             if attempt < MAX_RETRIES - 1:
                 time.sleep(delay) 
-        return False, "Failed to download {url} after {} attempts".format(MAX_RETRIES)
+        return False, "ERROR: HTTP max retries exceeded"
 
     def consume_eof(self, client_id, sender):
         logging.info("Received EOF message")

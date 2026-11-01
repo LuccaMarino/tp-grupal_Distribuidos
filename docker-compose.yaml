@@ -129,7 +129,7 @@ services:
       INPUT_GROUP: "images_group"
       OUTPUT_GROUP: "results_group"
       MAX_RETRIES: 4
-      RETRY_DELAY: 1
+      RETRY_DELAY: 0.6
     depends_on:
       parser_0:
         condition: service_started
@@ -148,7 +148,7 @@ services:
       INPUT_GROUP: "images_group"
       OUTPUT_GROUP: "results_group"
       MAX_RETRIES: 4
-      RETRY_DELAY: 1
+      RETRY_DELAY: 0.6
     depends_on:
       parser_0:
         condition: service_started
@@ -167,7 +167,7 @@ services:
       INPUT_GROUP: "images_group"
       OUTPUT_GROUP: "results_group"
       MAX_RETRIES: 4
-      RETRY_DELAY: 1
+      RETRY_DELAY: 0.6
     depends_on:
       parser_0:
         condition: service_started
