@@ -29,7 +29,7 @@ class WordJoiner:
     def __init__(self):
         self._input = GroupMember(MOM_HOST, INPUT_GROUP, ID)
         self._results = GroupSender(MOM_HOST, RESULTS_GROUP, GATEWAY_AMOUNT)
-        self._tops_by_client = {}    # client_id -> lista de [palabra, total] de los tops locales
+        self._tops_by_client = {}    # client_id -> lista de [palabra, total] con el top 20 global actual
         self._eofs_by_client = {}    # client_id -> set con los sender_id de los EOF recibidos
         signal.signal(signal.SIGTERM, self._handle_sigterm)
 
@@ -44,15 +44,16 @@ class WordJoiner:
             except MessageMiddlewareCloseError as e:
                 logging.error(e)
 
-    # Las palabras compartidas (Q3) se reenvían directo al gateway sin guardarlas,
-    # y se guardan los tops locales (Q4) para poder armar el global
+    # Las palabras compartidas (Q3) se reenvían directo al gateway sin guardarlas.
+    # Si se recibió un top 20 local, actualiza el top global de este cliente
     def _process_query_result(self, client_id, query, records):
         if query == message_protocol.internal.Query.Q3:
             self._results.send(message_protocol.internal.serialize_query_result(client_id, query, records))
         elif query == message_protocol.internal.Query.Q4:
             if client_id not in self._tops_by_client:
                 self._tops_by_client[client_id] = []
-            self._tops_by_client[client_id].extend(records)
+            current_top = self._tops_by_client.get(client_id, [])
+            self._tops_by_client[client_id] = self._top_words(current_top + records)
         else:
             logging.error(f"Discarding result of unexpected query {query}")
 
@@ -71,11 +72,11 @@ class WordJoiner:
         sorted_words = sorted(candidates, key=_top_order)
         return sorted_words[:TOP_SIZE]
 
-    # Envía el top 20 global y cierra Q3 y Q4, liberando el estado del cliente
+    # Envía el top 20 global y cierra Q3 y Q4, liberando el estado del cliente.
+    # De Q3 solo manda el EOF porque ya se enviaron todas las palabras compartidas 
     def _flush_client(self, client_id):
-        candidates = self._tops_by_client.pop(client_id, [])
+        top = self._tops_by_client.pop(client_id, [])
         self._eofs_by_client.pop(client_id)
-        top = self._top_words(candidates)
         logging.info(f"Client {client_id} finished: sending top {len(top)}")
         self._results.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q4, top))
         self._results.send(message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q4, ID))
