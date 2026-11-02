@@ -106,7 +106,11 @@ def _serialize_wiki_article(article: dict) -> bytes:
     """
     name = article.get("name") or ""
     abstract = article.get("abstract") or ""
-    lang = article.get("in_language").get("identifier", "")
+    raw_lang = article.get("in_language")
+    if isinstance(raw_lang, dict):
+        lang = str(raw_lang.get("identifier") or "")
+    else:
+        lang = ""
     url = article.get("url") or ""
     sections = article.get("sections") or ""
 

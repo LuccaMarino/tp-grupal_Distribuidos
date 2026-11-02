@@ -53,7 +53,6 @@ class ImageDownloader:
                 if attempt == (MAX_RETRIES - 1):
                     logging.error("Max retries exceeded for URL %s", url)
                     return False, "ERROR: HTTP max retries exceeded"
-                delay = RETRY_DELAY * (2 ** attempt)
             except requests.Timeout:
                 if attempt == (MAX_RETRIES - 1):
                     logging.error("Max retries exceeded for URL %s", url)
