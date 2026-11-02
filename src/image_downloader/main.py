@@ -76,7 +76,7 @@ class ImageDownloader:
                     image_content_b64 = base64.b64encode(image_content).decode("ascii")
                 else:
                     image_content_b64 = image_content
-                self.output_group.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q2, [name, url, image_content_b64]))
+                self.output_group.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q2, [[name, url, image_content_b64]]))
                 #logging.info(f"Downloaded image size: {len(image_content)} bytes" + f" for article {name} ({url})")
         except requests.HTTPError as e:
             logging.warning("Downloading image failed for %s (%s): %s", url, image_url, e)

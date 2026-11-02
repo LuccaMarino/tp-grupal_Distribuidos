@@ -99,7 +99,7 @@ class Parser:
         try:
             article_fields = self.extract_article_fields(article)
             if article_fields.get("year") is not None and article_fields["year"] <= 2020 and article_fields.get("language") == "en" and article_fields.get("date_modified"):
-                self.q1_group.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q1, [article_fields["url"], article_fields["date_modified"]]))
+                self.q1_group.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q1, [[article_fields["url"], article_fields["date_modified"]]]))
             if article_fields["biography"] == True and article_fields.get("year") is not None and article_fields["year"] <= 2020 and article_fields.get("image_url"):
                 #logging.info(f"SENDING biography article to q2: {article_fields['name']} ({article_fields['url']})")
                 self.q2_group.send(message_protocol.internal.serialize_data(client_id, [article_fields["name"], article_fields["url"], article_fields["image_url"]]))

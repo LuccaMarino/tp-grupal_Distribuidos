@@ -92,7 +92,7 @@ class WordAggregator:
         sent_amount = 0
         for word, counts in counts_by_word.items():
             if counts[EN_INDEX] > 0 and counts[FR_INDEX] > 0:
-                batch.append(word)
+                batch.append([word])
                 if len(batch) == SHARED_BATCH_SIZE:
                     self._send_shared_batch(client_id, batch)
                     sent_amount += len(batch)
