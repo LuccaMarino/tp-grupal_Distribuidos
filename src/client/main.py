@@ -121,7 +121,7 @@ class Client:
                     )
                     sent_count += 1
                     if sent_count % 10000 == 0:
-                            print(f"(Articles sent to gateway {sent_count} / {total_articles} .")
+                        print(f"{filename}: {sent_count} / {total_articles} articles sent to gateway.")
         message_protocol.external.send_msg(
             self.server_socket,
             message_protocol.external.MsgType.END_OF_RECORDS
@@ -135,6 +135,7 @@ class Client:
 def main():
     client = Client()
     receiver = None
+    start_time = time.perf_counter()
     try:
         client.connect(SERVER_HOST, SERVER_PORT)
         receiver = threading.Thread(target=client.receive_messages,daemon=True)
@@ -148,6 +149,10 @@ def main():
         if receiver is not None:
             receiver.join()
         client.close_output_files()
+        elapsed_time = time.perf_counter() - start_time
+        minutes = int(elapsed_time // 60)
+        seconds = elapsed_time % 60
+        print(f"⏱️ [TIMER] TOTAL TIME: {elapsed_time:.2f} seconds ({minutes}m {seconds:.2f}s)")
         logging.info("Client disconnected.")
 
 if __name__ == "__main__":
