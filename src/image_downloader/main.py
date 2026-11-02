@@ -15,6 +15,7 @@ RETRY_DELAY = float(os.environ.get("RETRY_DELAY"))
 ID = os.environ["ID"]
 GATEWAY_AMOUNT = int(os.environ["GATEWAY_AMOUNT"])
 USER_AGENT = "WikipediaAnalysisBot/1.0 (contact: pciliberto@fi.uba.ar)"
+RATE_LIMITING_DELAY = 0.125  # 8 requests per second
 
 class ImageDownloader:
     def __init__(self):
@@ -79,7 +80,7 @@ class ImageDownloader:
                 else:
                     image_content_b64 = image_content
                 self.output_group.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q2, [[name, url, image_content_b64]]))
-                #logging.info(f"Downloaded image size: {len(image_content)} bytes" + f" for article {name} ({url})")
+                time.sleep(RATE_LIMITING_DELAY)
         except requests.HTTPError as e:
             logging.warning("Downloading image failed for %s (%s): %s", url, image_url, e)
         except Exception:
