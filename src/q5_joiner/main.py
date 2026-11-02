@@ -92,7 +92,7 @@ class Q5Joiner:
                     url, length_str = line.strip().split("\t")
                     length = int(length_str)
                     if length > old_articles_average:
-                        result_message = message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q5, [url, length])
+                        result_message = message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q5, [[url, length]])
                         self._results_sender.send(result_message)
             os.remove(file_path)
         eof_message = message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q5, ID)

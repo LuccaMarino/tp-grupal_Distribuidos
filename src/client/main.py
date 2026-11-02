@@ -74,7 +74,7 @@ class Client:
         writer = self.csv_writers.get(query)
         if writer is None:
             raise ValueError(f"Unknown query: {query}")
-        writer.writerow(result)
+        writer.writerows(result)
 
     def receive_messages(self):
         ack_count = 0
