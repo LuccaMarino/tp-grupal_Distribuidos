@@ -11,6 +11,8 @@ class MessageHandler:
 
 
     def serialize_article_message(self, data):
+        if isinstance(data, list):
+            return message_protocol.internal.serialize_data(self.client_id, data)
         return message_protocol.internal.serialize_data(self.client_id, [data])
 
 

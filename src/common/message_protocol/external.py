@@ -12,6 +12,12 @@ class MsgType:
     QUERY_RESULT = 4
     END_OF_QUERY_RESULTS = 5
 
+def _serialize_wiki_article_batch(articles: list) -> bytes:
+    batch_bytes = [external_serializer.serialize_uint32(len(articles))]
+    for article in articles:
+        batch_bytes.append(_serialize_wiki_article(article))
+    return b"".join(batch_bytes)
+
 def _recv_sized(socket, size: int) -> bytes:
     """
     Receive a specific number of bytes from the socket, preventing short reads. Raises `IncompleteReadError` if the connection is closed before the specified number of bytes is received.
@@ -25,28 +31,31 @@ def _recv_sized(socket, size: int) -> bytes:
         pos += n
     return bytes(buf)
 
-def _recv_wiki_article(socket) -> dict:
+def _recv_wiki_articles(socket) -> dict:
     """
-    Receive a WIKI_ARTICLE message from the socket and deserialize it into a dictionary containing the article's details. The dictionary includes the following keys: `name`, `abstract`, `lang`, `url`, `sections`, and `date_modified`.
+    Receive a WIKI_ARTICLE message from the socket and deserialize it into a dictionary containing the articles' details. The dictionary includes the following keys: `name`, `abstract`, `lang`, `url`, `sections`, and `date_modified`.
     """
-    name = external_serializer.deserialize_string(socket, _recv_sized)
-    abstract = external_serializer.deserialize_string(socket, _recv_sized)
-    lang = external_serializer.deserialize_string(socket, _recv_sized)
-    url = external_serializer.deserialize_string(socket, _recv_sized)
-    sections = external_serializer.deserialize_string(socket, _recv_sized)
-    image = external_serializer.deserialize_string(socket, _recv_sized)
-    date_modified_bytes = _recv_sized(socket, external_serializer.UINT64_SIZE)
-    date_modified = external_serializer.deserialize_uint64(date_modified_bytes)
-
-    return {
-        "name": name,
-        "abstract": abstract,
-        "lang": lang,
-        "url": url,
-        "sections": sections,
-        "image": image,
-        "date_modified": date_modified,
-    }
+    count = external_serializer.deserialize_uint32(_recv_sized(socket, external_serializer.UINT32_SIZE))
+    articles = []
+    for _ in range(count):
+        name = external_serializer.deserialize_string(socket, _recv_sized)
+        abstract = external_serializer.deserialize_string(socket, _recv_sized)
+        lang = external_serializer.deserialize_string(socket, _recv_sized)
+        url = external_serializer.deserialize_string(socket, _recv_sized)
+        sections = external_serializer.deserialize_string(socket, _recv_sized)
+        image = external_serializer.deserialize_string(socket, _recv_sized)
+        date_modified_bytes = _recv_sized(socket, external_serializer.UINT64_SIZE)
+        date_modified = external_serializer.deserialize_uint64(date_modified_bytes)
+        articles.append({
+            "name": name,
+            "abstract": abstract,
+            "lang": lang,
+            "url": url,
+            "sections": sections,
+            "image": image,
+            "date_modified": date_modified,
+        })
+    return articles
 
 def _recv_empty(socket):
     """
@@ -68,7 +77,7 @@ def _recv_end_of_query_results(socket):
     )
 
 RECV_MSG_HANDLERS = {
-    MsgType.WIKI_ARTICLE: _recv_wiki_article,
+    MsgType.WIKI_ARTICLE: _recv_wiki_articles,
     MsgType.END_OF_RECORDS: _recv_empty,
     MsgType.ACK: _recv_empty,
     MsgType.QUERY_RESULT: _recv_query_result,
@@ -76,7 +85,7 @@ RECV_MSG_HANDLERS = {
 }
 """
     A dictionary mapping message types to their corresponding handler functions for receiving messages. Each message type is associated with a function that knows how to deserialize the message from the socket.
-    - `MsgType.WIKI_ARTICLE`: Handled by `_recv_wiki_article`, which deserializes a WIKI_ARTICLE message into a dictionary containing the article's details.
+    - `MsgType.WIKI_ARTICLE`: Handled by `_recv_wiki_articles`, which deserializes a WIKI_ARTICLE message into a list of dictionaries containing the articles' details.
     - `MsgType.END_OF_RECORDS`: Handled by `_recv_empty`, which simply returns `None` since this message type does not carry any additional data.
     - `MsgType.ACK`: Handled by `_recv_empty`, which also returns `None` as this message type does not carry any additional data.
 """
@@ -125,12 +134,14 @@ def _serialize_wiki_article(article: dict) -> bytes:
         external_serializer.serialize_uint64(date_modified),
     ])
 
-def _send_wiki_article(socket, article: dict):
+def _send_wiki_articles(socket, articles):
     """
-    Send a WIKI_ARTICLE message to the socket. The article is serialized into bytes and sent along with the message type.
+    Send a WIKI_ARTICLE message to the socket. The articles are serialized into bytes and sent along with the message type.
     """
+    if isinstance(articles, dict):
+        articles = [articles]
     msg = external_serializer.serialize_uint32(MsgType.WIKI_ARTICLE)
-    msg += _serialize_wiki_article(article)
+    msg += _serialize_wiki_article_batch(articles)
     socket.sendall(msg)
 
 def _send_end_of_records(socket):
@@ -155,7 +166,7 @@ def _send_end_of_query_results(sock, query):
     sock.sendall(external_serializer.serialize_uint32(MsgType.END_OF_QUERY_RESULTS) + external_serializer.serialize_uint32(query))
 
 SEND_MSG_HANDLERS = {
-    MsgType.WIKI_ARTICLE: _send_wiki_article,
+    MsgType.WIKI_ARTICLE: _send_wiki_articles,
     MsgType.END_OF_RECORDS: _send_end_of_records,
     MsgType.ACK: _send_ack,
     MsgType.QUERY_RESULT: _send_query_result,
@@ -163,7 +174,7 @@ SEND_MSG_HANDLERS = {
 }
 """
     A dictionary mapping message types to their corresponding handler functions for sending messages. Each message type is associated with a function that knows how to serialize and send the message to the socket.
-    - `MsgType.WIKI_ARTICLE`: Handled by `_send_wiki_article`, which serializes a WIKI_ARTICLE message and sends it to the socket.
+    - `MsgType.WIKI_ARTICLE`: Handled by `_send_wiki_articles`, which serializes a WIKI_ARTICLE containing a batch of articles and sends it to the socket.
     - `MsgType.END_OF_RECORDS`: Handled by `_send_end_of_records`, which sends an END_OF_RECORDS message to the socket, indicating that there are no more records to be sent.
     - `MsgType.ACK`: Handled by `_send_ack`, which sends an ACK message to the socket, acknowledging receipt of a previous message.
 """
