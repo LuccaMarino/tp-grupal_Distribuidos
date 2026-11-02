@@ -4,6 +4,7 @@ x-client-env: &client-env
   SERVER_PORT: "5678"
   RETRY_COUNT: "5"
   DELAY_BETWEEN_RETRIES: "1"
+  BATCH_SIZE: "100"
 
 x-client-base: &client-base
   build:
