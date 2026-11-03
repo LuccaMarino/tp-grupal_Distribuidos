@@ -13,6 +13,9 @@ from .middleware import (
 # Cant. máxima de mensajes sin ack que RabbitMQ le entrega a un consumidor
 DEFAULT_PREFETCH_COUNT = 10
 
+DEFAULT_HEARTBEAT = 120
+DEFAULT_BLOCKED_CONNECTION_TIMEOUT = 300
+
 DISCONNECTED_MSG = "Lost connection to RabbitMQ while {}: {!r}"
 RABBITMQ_ERROR_MSG = "RabbitMQ error while {}: {!r}"
 CLOSE_ERROR_MSG = "Error closing RabbitMQ resources: {!r}"
@@ -28,7 +31,12 @@ class _MessageMiddlewareRabbitMQBase:
         self._is_consuming = False
         action = f"connecting to {host}"
         try:
-            self._connection = pika.BlockingConnection(pika.ConnectionParameters(host=host))
+            params = pika.ConnectionParameters(
+                host=host,
+                heartbeat=DEFAULT_HEARTBEAT,
+                blocked_connection_timeout=DEFAULT_BLOCKED_CONNECTION_TIMEOUT
+            )
+            self._connection = pika.BlockingConnection(params)
             self._channel = self._connection.channel()
             self._declare()
         except AMQPConnectionError as e:

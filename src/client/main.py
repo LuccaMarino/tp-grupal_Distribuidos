@@ -18,6 +18,7 @@ OUTPUT_FILE_Q4 = os.environ["OUTPUT_FILE_Q4"]
 OUTPUT_FILE_Q5 = os.environ["OUTPUT_FILE_Q5"]
 RETRY_COUNT = int(os.environ["RETRY_COUNT"])
 DELAY_BETWEEN_RETRIES = int(os.environ["DELAY_BETWEEN_RETRIES"])
+BATCH_SIZE = int(os.environ.get("BATCH_SIZE"))
 QUERY_OUTPUTS = {
     message_protocol.internal.Query.Q1: {"path": OUTPUT_FILE_Q1,"fields": ["url", "date_modified"]},
     message_protocol.internal.Query.Q2: {"path": OUTPUT_FILE_Q2,"fields": ["name", "url", "image"]},
@@ -97,7 +98,6 @@ class Client:
                 logging.error(f"Error receiving messages: {e}")
         finally:
             self.closed.set()
-            logging.info(f"ACKs received: {ack_count}")
 
     def send_wikipedia_articles(self, input_dir):
         parquet_files = [
@@ -112,16 +112,16 @@ class Client:
             total_articles = parquet_file.metadata.num_rows
             logging.info(f"Sending {total_articles} articles from {filename}...")
             sent_count = 0
-            for batch in parquet_file.iter_batches(batch_size=500):
-                for article in batch.to_pylist():
-                    message_protocol.external.send_msg(
-                        self.server_socket,
-                        message_protocol.external.MsgType.WIKI_ARTICLE,
-                        article
-                    )
-                    sent_count += 1
-                    if sent_count % 10000 == 0:
-                            print(f"(Articles sent to gateway {sent_count} / {total_articles} .")
+            for batch in parquet_file.iter_batches(batch_size=BATCH_SIZE):
+                article_list = batch.to_pylist()
+                message_protocol.external.send_msg(
+                    self.server_socket,
+                    message_protocol.external.MsgType.WIKI_ARTICLE,
+                    article_list
+                )
+                sent_count += len(article_list)
+                if sent_count % 10000 == 0:
+                    print(f"{filename}: {sent_count} / {total_articles} articles sent to gateway.")
         message_protocol.external.send_msg(
             self.server_socket,
             message_protocol.external.MsgType.END_OF_RECORDS
@@ -135,6 +135,7 @@ class Client:
 def main():
     client = Client()
     receiver = None
+    start_time = time.perf_counter()
     try:
         client.connect(SERVER_HOST, SERVER_PORT)
         receiver = threading.Thread(target=client.receive_messages,daemon=True)
@@ -148,6 +149,10 @@ def main():
         if receiver is not None:
             receiver.join()
         client.close_output_files()
+        elapsed_time = time.perf_counter() - start_time
+        minutes = int(elapsed_time // 60)
+        seconds = elapsed_time % 60
+        print(f"⏱️ [TIMER] TOTAL TIME: {elapsed_time:.2f} seconds ({minutes}m {seconds:.2f}s)")
         logging.info("Client disconnected.")
 
 if __name__ == "__main__":

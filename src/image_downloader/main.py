@@ -14,10 +14,8 @@ MAX_RETRIES = int(os.environ.get("MAX_RETRIES"))
 RETRY_DELAY = float(os.environ.get("RETRY_DELAY"))
 ID = os.environ["ID"]
 GATEWAY_AMOUNT = int(os.environ["GATEWAY_AMOUNT"])
-USER_AGENT = (
-    "ImageDownloaderTP/"
-    "0.1 (FIUBA Sistemas Distribuidos)"
-)
+USER_AGENT = "WikipediaAnalysisBot/1.0 (contact: pciliberto@fi.uba.ar)"
+RATE_LIMITING_DELAY = 0.125  # 8 requests per second
 
 class ImageDownloader:
     def __init__(self):
@@ -47,12 +45,16 @@ class ImageDownloader:
                 if status_code not in {429, 500, 502, 503, 504}:
                     logging.error("ERROR for URL %s: HTTP status code %d", url, status_code)
                     return False, "ERROR: HTTP Error"
-                if attempt == (MAX_RETRIES - 1 ):
+                if status_code == 429:
+                    retry_after = response.headers.get("Retry-After")
+                    delay = float(retry_after) if retry_after else max(3.0, RETRY_DELAY * (2 ** attempt))
+                else:
+                    delay = RETRY_DELAY * (2 ** attempt)
+                if attempt == (MAX_RETRIES - 1):
                     logging.error("Max retries exceeded for URL %s", url)
                     return False, "ERROR: HTTP max retries exceeded"
-                delay = RETRY_DELAY * (2 ** attempt)
             except requests.Timeout:
-                if attempt == (MAX_RETRIES - 1 ):
+                if attempt == (MAX_RETRIES - 1):
                     logging.error("Max retries exceeded for URL %s", url)
                     return False, "ERROR: HTTP max retries exceeded"
                 delay = RETRY_DELAY * (2 ** attempt)
@@ -77,7 +79,7 @@ class ImageDownloader:
                 else:
                     image_content_b64 = image_content
                 self.output_group.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q2, [[name, url, image_content_b64]]))
-                #logging.info(f"Downloaded image size: {len(image_content)} bytes" + f" for article {name} ({url})")
+                time.sleep(RATE_LIMITING_DELAY)
         except requests.HTTPError as e:
             logging.warning("Downloading image failed for %s (%s): %s", url, image_url, e)
         except Exception:

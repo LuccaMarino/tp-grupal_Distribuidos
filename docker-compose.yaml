@@ -4,6 +4,7 @@ x-client-env: &client-env
   SERVER_PORT: "5678"
   RETRY_COUNT: "5"
   DELAY_BETWEEN_RETRIES: "1"
+  BATCH_SIZE: "100"
 
 x-client-base: &client-base
   build:
@@ -29,7 +30,7 @@ services:
       SERVER_HOST: "gateway"
       SERVER_PORT: "5678"
       PARSER_AMOUNT: 3
-      IMAGE_DOWNLOADER_AMOUNT : 2
+      IMAGE_DOWNLOADER_AMOUNT : 1
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -64,7 +65,7 @@ services:
       OUTPUT_Q2: "images_group"
       OUTPUT_ABSTRACT: "abstracts_group"
       GATEWAY_AMOUNT: 1
-      IMAGE_DOWNLOADER_AMOUNT: 2
+      IMAGE_DOWNLOADER_AMOUNT: 1
       WORD_SUM_AMOUNT: 3
       PYTHONUNBUFFERED: "1"
     depends_on:
@@ -86,7 +87,7 @@ services:
       OUTPUT_Q2: "images_group"
       OUTPUT_ABSTRACT: "abstracts_group"
       GATEWAY_AMOUNT: 1
-      IMAGE_DOWNLOADER_AMOUNT: 2
+      IMAGE_DOWNLOADER_AMOUNT: 1
       WORD_SUM_AMOUNT: 3
       PYTHONUNBUFFERED: "1"
     depends_on:
@@ -108,7 +109,7 @@ services:
       OUTPUT_Q2: "images_group"
       OUTPUT_ABSTRACT: "abstracts_group"
       GATEWAY_AMOUNT: 1
-      IMAGE_DOWNLOADER_AMOUNT: 2
+      IMAGE_DOWNLOADER_AMOUNT: 1
       WORD_SUM_AMOUNT: 3
       PYTHONUNBUFFERED: "1"
     depends_on:
@@ -124,44 +125,6 @@ services:
     container_name: image_downloader_0
     environment:
       ID: "0"
-      MOM_HOST: "rabbitmq"
-      GATEWAY_AMOUNT: 1
-      INPUT_GROUP: "images_group"
-      OUTPUT_GROUP: "results_group"
-      MAX_RETRIES: 4
-      RETRY_DELAY: 0.6
-    depends_on:
-      parser_0:
-        condition: service_started
-      rabbitmq:
-        condition: service_healthy
-
-  image_downloader_1:
-    build:
-      context: ./src/
-      dockerfile: image_downloader/Dockerfile
-    container_name: image_downloader_1
-    environment:
-      ID: "1"
-      MOM_HOST: "rabbitmq"
-      GATEWAY_AMOUNT: 1
-      INPUT_GROUP: "images_group"
-      OUTPUT_GROUP: "results_group"
-      MAX_RETRIES: 4
-      RETRY_DELAY: 0.6
-    depends_on:
-      parser_0:
-        condition: service_started
-      rabbitmq:
-        condition: service_healthy
-
-  image_downloader_2:
-    build:
-      context: ./src/
-      dockerfile: image_downloader/Dockerfile
-    container_name: image_downloader_2
-    environment:
-      ID: "2"
       MOM_HOST: "rabbitmq"
       GATEWAY_AMOUNT: 1
       INPUT_GROUP: "images_group"
@@ -417,6 +380,66 @@ services:
   #     OUTPUT_FILE_Q4: "/output/client_4_output_q4.csv"
   #     OUTPUT_FILE_Q5: "/output/client_4_output_q5.csv"
   #     INPUT_DIR: "/datasets/client_4"
+
+  # client_5:
+  #   <<: *client-base
+  #   container_name: client_5
+  #   environment:
+  #     <<: *client-env
+  #     OUTPUT_FILE_Q1: "/output/client_5_output_q1.csv"
+  #     OUTPUT_FILE_Q2: "/output/client_5_output_q2.csv"
+  #     OUTPUT_FILE_Q3: "/output/client_5_output_q3.csv"
+  #     OUTPUT_FILE_Q4: "/output/client_5_output_q4.csv"
+  #     OUTPUT_FILE_Q5: "/output/client_5_output_q5.csv"
+  #     INPUT_DIR: "/datasets/client_5"
+
+  # client_6:
+  #   <<: *client-base
+  #   container_name: client_6
+  #   environment:
+  #     <<: *client-env
+  #     OUTPUT_FILE_Q1: "/output/client_6_output_q1.csv"
+  #     OUTPUT_FILE_Q2: "/output/client_6_output_q2.csv"
+  #     OUTPUT_FILE_Q3: "/output/client_6_output_q3.csv"
+  #     OUTPUT_FILE_Q4: "/output/client_6_output_q4.csv"
+  #     OUTPUT_FILE_Q5: "/output/client_6_output_q5.csv"
+  #     INPUT_DIR: "/datasets/client_6"
+
+  # client_7:
+  #   <<: *client-base
+  #   container_name: client_7
+  #   environment:
+  #     <<: *client-env
+  #     OUTPUT_FILE_Q1: "/output/client_7_output_q1.csv"
+  #     OUTPUT_FILE_Q2: "/output/client_7_output_q2.csv"
+  #     OUTPUT_FILE_Q3: "/output/client_7_output_q3.csv"
+  #     OUTPUT_FILE_Q4: "/output/client_7_output_q4.csv"
+  #     OUTPUT_FILE_Q5: "/output/client_7_output_q5.csv"
+  #     INPUT_DIR: "/datasets/client_7"
+
+  # client_8:
+  #   <<: *client-base
+  #   container_name: client_8
+  #   environment:
+  #     <<: *client-env
+  #     OUTPUT_FILE_Q1: "/output/client_8_output_q1.csv"
+  #     OUTPUT_FILE_Q2: "/output/client_8_output_q2.csv"
+  #     OUTPUT_FILE_Q3: "/output/client_8_output_q3.csv"
+  #     OUTPUT_FILE_Q4: "/output/client_8_output_q4.csv"
+  #     OUTPUT_FILE_Q5: "/output/client_8_output_q5.csv"
+  #     INPUT_DIR: "/datasets/client_8"
+
+  # client_9:
+  #   <<: *client-base
+  #   container_name: client_9
+  #   environment:
+  #     <<: *client-env
+  #     OUTPUT_FILE_Q1: "/output/client_9_output_q1.csv"
+  #     OUTPUT_FILE_Q2: "/output/client_9_output_q2.csv"
+  #     OUTPUT_FILE_Q3: "/output/client_9_output_q3.csv"
+  #     OUTPUT_FILE_Q4: "/output/client_9_output_q4.csv"
+  #     OUTPUT_FILE_Q5: "/output/client_9_output_q5.csv"
+  #     INPUT_DIR: "/datasets/client_9"
 
 volumes:
   q5_joiner_new_articles:
