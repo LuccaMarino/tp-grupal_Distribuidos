@@ -96,6 +96,9 @@ class GroupMember:
             host, group_name, [queue_name], queue_name=queue_name, prefetch_count=prefetch_count
         )
 
+    def process_pending_events(self):
+        self._exchange.process_pending_events()
+
     # keep_alive son emisores del nodo que pueden pasar mucho tiempo sin enviar. 
     # Mientras se consume se mantienen sus conexiones vivas
     def start_consuming(self, on_message_callback, keep_alive=()):

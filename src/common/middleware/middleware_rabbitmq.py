@@ -28,7 +28,7 @@ ALREADY_CONSUMING_MSG = "Already consuming messages. Stop consuming before start
 
 class _MessageMiddlewareRabbitMQBase:
 
-    def __init__(self, host, prefetch_count):
+    def __init__(self, host, prefetch_count, heartbeat=DEFAULT_HEARTBEAT):
         self._prefetch_count = prefetch_count
         self._connection = None
         self._channel = None
@@ -39,7 +39,7 @@ class _MessageMiddlewareRabbitMQBase:
         try:
             params = pika.ConnectionParameters(
                 host=host,
-                heartbeat=DEFAULT_HEARTBEAT,
+                heartbeat=heartbeat,
                 blocked_connection_timeout=DEFAULT_BLOCKED_CONNECTION_TIMEOUT
             )
             self._connection = pika.BlockingConnection(params)
@@ -111,7 +111,7 @@ class _MessageMiddlewareRabbitMQBase:
         if self._keep_alive_timer is None:
             return
         try:
-            if self._connection.is_open:
+            if self._connection and self._connection.is_open:
                 self._connection.remove_timeout(self._keep_alive_timer)
         except AMQPError as e:
             logging.warning(f"Error while cancelling keep alive timer: {e!r}")
@@ -122,7 +122,7 @@ class _MessageMiddlewareRabbitMQBase:
         try:
             if self._connection is not None and self._connection.is_open:
                 self._connection.process_data_events(time_limit=0)
-        except AMQPError as e:
+        except Exception as e:
             logging.warning(f"Error while keeping RabbitMQ connection alive: {e!r}")
 
     def stop_consuming(self):
@@ -177,9 +177,9 @@ class _MessageMiddlewareRabbitMQBase:
 
 class MessageMiddlewareQueueRabbitMQ(_MessageMiddlewareRabbitMQBase, MessageMiddlewareQueue):
 
-    def __init__(self, host, queue_name, prefetch_count=DEFAULT_PREFETCH_COUNT):
+    def __init__(self, host, queue_name, prefetch_count=DEFAULT_PREFETCH_COUNT, heartbeat=DEFAULT_HEARTBEAT):
         self._queue_name = queue_name
-        super().__init__(host, prefetch_count)
+        super().__init__(host, prefetch_count, heartbeat)
 
     def _declare(self):
         self._channel.queue_declare(queue=self._queue_name, durable=True)
@@ -203,11 +203,11 @@ class MessageMiddlewareExchangeRabbitMQ(_MessageMiddlewareRabbitMQBase, MessageM
     # sin nombre (None), la cola se crea recién en el primer start_consuming y se reutiliza en los 
     # siguientes (es anónima). Con nombre, la cola se declara y bindea al construir el objeto, 
     # reteniendo los mensajes que lleguen antes de llamar a start_consuming
-    def __init__(self, host, exchange_name, routing_keys, queue_name=None,  prefetch_count=DEFAULT_PREFETCH_COUNT):
+    def __init__(self, host, exchange_name, routing_keys, queue_name=None, prefetch_count=DEFAULT_PREFETCH_COUNT, heartbeat=DEFAULT_HEARTBEAT):
         self._exchange_name = exchange_name
         self._routing_keys = routing_keys
         self._queue_name = queue_name
-        super().__init__(host, prefetch_count)
+        super().__init__(host, prefetch_count, heartbeat)
 
     def _declare(self):
         self._channel.exchange_declare(exchange=self._exchange_name, exchange_type='direct', durable=True)

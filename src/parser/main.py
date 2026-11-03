@@ -42,6 +42,8 @@ class Parser:
 
     def extract_sections(self, sections_raw):
         section_names = set()
+        if sections_raw is None or (isinstance(sections_raw, str) and not sections_raw.strip()):
+            return section_names
         try:
             sections_raw = json.loads(sections_raw)
         except Exception as e:
@@ -92,7 +94,6 @@ class Parser:
             result["biography"] = True
         else:
             result["biography"] = False
-        #print(result)
         return result
 
     def consume_article(self, client_id, article):
@@ -101,11 +102,10 @@ class Parser:
             if article_fields.get("year") is not None and article_fields["year"] <= 2020 and article_fields.get("language") == "en" and article_fields.get("date_modified"):
                 self.q1_group.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q1, [[article_fields["url"], article_fields["date_modified"]]]))
             if article_fields["biography"] == True and article_fields.get("year") is not None and article_fields["year"] <= 2020 and article_fields.get("image_url"):
-                #logging.info(f"SENDING biography article to q2: {article_fields['name']} ({article_fields['url']})")
                 self.q2_group.send(message_protocol.internal.serialize_data(client_id, [article_fields["name"], article_fields["url"], article_fields["image_url"]]))
                 self.q2_sent += 1
-                logging.info("Q2_SENT count=%d name=%s",self.q2_sent,article_fields["name"])
-            if article_fields.get("language") and article_fields.get("year") is not None and  article_fields.get("url") and article_fields.get("abstract"):
+                logging.info("Q2_SENT count=%d name=%s", self.q2_sent, article_fields["name"])
+            if article_fields.get("language") and article_fields.get("year") is not None and article_fields.get("url") and article_fields.get("abstract"):
                 self.abstract_group.send(message_protocol.internal.serialize_data(client_id, [[article_fields.get("language"), article_fields.get("year"), article_fields.get("url"), article_fields.get("abstract")]]))      
         except Exception:
             logging.exception("Error processing article message")
@@ -129,10 +129,13 @@ class Parser:
             elif msg_type == message_protocol.internal.MsgType.DATA:
                 if len(args) != 1 or not isinstance(args[0], list):
                     raise ValueError("Expected a list of articles in the parser input message")
-                for article in args[0]:
+                for i, article in enumerate(args[0]):
                     if not isinstance(article, dict):
                         raise ValueError("Expected each parser input article to be an object")
                     self.consume_article(client_id, article)
+                    # Mantiene las conexiones activas antes de enviar
+                    if i % 100 == 0:
+                        self.input_group_member.process_pending_events()
             else:
                 raise ValueError(f"Unexpected parser input message type: {msg_type}")
             ack()
@@ -142,7 +145,10 @@ class Parser:
 
     def start(self):
         try:
-            self.input_group_member.start_consuming(self.consume_message)
+            self.input_group_member.start_consuming(
+                self.consume_message,
+                [self.q1_group, self.q2_group, self.abstract_group]
+            )
         finally:
             self._close()
 
