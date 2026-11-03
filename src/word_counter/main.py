@@ -45,6 +45,8 @@ class WordCounter:
         self._received_eofs[client_id].add(sender_id)
         if len(self._received_eofs[client_id]) == EXPECTED_EOFS:
             total_words, total_articles = self._stats.get(client_id, [0, 0])
+            self._input.process_pending_events()
+            self._sum_partial_length.process_pending_events()
             data_message = message_protocol.internal.serialize_data(client_id, [total_words, total_articles])
             self._sum_partial_length.send(data_message)
             eof_message = message_protocol.internal.serialize_eof(client_id, f"word_counter_{ID}")
@@ -67,7 +69,7 @@ class WordCounter:
 
     def start(self):
         try:
-            self._input.start_consuming(self._process_message)
+            self._input.start_consuming(self._process_message, [self._sum_partial_length])
         finally:
             self._close()
 

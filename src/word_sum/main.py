@@ -19,6 +19,8 @@ Q5_JOINER_GROUP = os.environ["Q5_JOINER_GROUP"]
 
 
 Q5_JOINER_AMOUNT = 1
+
+# Para Q5. Hasta este año inclusive se usa para el promedio, y después se filtra
 LAST_OLD_YEAR = 2020
 
 # Posición de cada idioma en el conteo que se envía a los aggregators ([total, n_en, n_fr])
@@ -66,12 +68,11 @@ class WordSum:
             if language_index is not None:
                 counts_by_word[word][language_index] += 1
 
-    
     def _process_data(self, client_id, records):
         counts_by_word = {}
         old_lengths = []
         new_articles = []
-        for lang, year, url, abstract in records:
+        for i, (lang, year, url, abstract) in enumerate(records):
             words = self._extract_words(abstract)
             # para Q3 y Q4
             self._add_counts(counts_by_word, lang, words)
@@ -80,6 +81,9 @@ class WordSum:
                 old_lengths.append(len(words))
             else:
                 new_articles.append([url, len(words)])
+            # Mantiene las conexiones activas antes de enviar
+            if i > 0 and i % 100 == 0:
+                self._input.process_pending_events()
 
         def build_counts_message(member_counts):
             counts_records = []
@@ -88,6 +92,7 @@ class WordSum:
                 counts_records.append([word, counts[0], counts[1], counts[2]])
             return message_protocol.internal.serialize_data(client_id, counts_records)
 
+        self._input.process_pending_events()
         self._aggregators.send_partitioned(counts_by_word, build_counts_message)
         if old_lengths:
             self._word_counters.send(message_protocol.internal.serialize_data(client_id, old_lengths))
@@ -99,6 +104,7 @@ class WordSum:
     # cada receptor espera un EOF por cada par
     def _process_eof(self, client_id, parser_id):
         logging.info(f"Received EOF from parser {parser_id} for client {client_id}")
+        self._input.process_pending_events()
         eof_message = message_protocol.internal.serialize_eof(client_id, f"{parser_id}.{ID}")
         self._aggregators.broadcast(eof_message)
         self._word_counters.broadcast(eof_message)
@@ -119,7 +125,10 @@ class WordSum:
 
     def start(self):
         try:
-            self._input.start_consuming(self._process_message)
+            self._input.start_consuming(
+                self._process_message,
+                [self._aggregators, self._word_counters, self._q5_joiner]
+            )
         finally:
             self._close()
 

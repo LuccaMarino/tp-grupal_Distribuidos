@@ -88,12 +88,16 @@ class Q5Joiner:
         file_path = self._client_file_path(client_id)
         if os.path.exists(file_path):
             with open(file_path, "r") as f:
-                for line in f:
+                for i, line in enumerate(f):
                     url, length_str = line.strip().split("\t")
                     length = int(length_str)
                     if length > old_articles_average:
                         result_message = message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q5, [[url, length]])
                         self._results_sender.send(result_message)
+                    # Mantiene las conexiones activas antes de enviar
+                    if i % 1000 == 0:
+                        self._new_articles.process_pending_events()
+                        self._results_sender.process_pending_events()
             os.remove(file_path)
         eof_message = message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q5, ID)
         self._results_sender.broadcast(eof_message)
@@ -130,7 +134,7 @@ class Q5Joiner:
     def start(self):
         t1 = threading.Thread(
             target=self._new_articles.start_consuming,
-            args=(self._process_new_articles_message,)
+            args=(self._process_new_articles_message, [self._results_sender])
         )
         t2 = threading.Thread(
             target=self._sum_partial_length.start_consuming,
