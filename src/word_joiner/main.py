@@ -98,7 +98,7 @@ class WordJoiner:
 
     def start(self):
         try:
-            self._input.start_consuming(self._process_message)
+            self._input.start_consuming(self._process_message, [self._results])
         finally:
             self._close()
 

@@ -16,6 +16,10 @@ DEFAULT_PREFETCH_COUNT = 10
 DEFAULT_HEARTBEAT = 120
 DEFAULT_BLOCKED_CONNECTION_TIMEOUT = 300
 
+# Cada cuantos segundos un consumidor atiende las conexiones que tiene 
+# que mantener vivas
+KEEP_ALIVE_INTERVAL = DEFAULT_HEARTBEAT / 4
+
 DISCONNECTED_MSG = "Lost connection to RabbitMQ while {}: {!r}"
 RABBITMQ_ERROR_MSG = "RabbitMQ error while {}: {!r}"
 CLOSE_ERROR_MSG = "Error closing RabbitMQ resources: {!r}"
@@ -29,6 +33,8 @@ class _MessageMiddlewareRabbitMQBase:
         self._connection = None
         self._channel = None
         self._is_consuming = False
+        self._keep_alive = []
+        self._keep_alive_timer = None
         action = f"connecting to {host}"
         try:
             params = pika.ConnectionParameters(
@@ -60,7 +66,9 @@ class _MessageMiddlewareRabbitMQBase:
             on_message_callback(body, ack, nack)
         return _internal_callback
 
-    def _consume(self, queue_name, on_message_callback):
+    # keep_alive son otros objetos del middleware cuyas conexiones se mantienen 
+    # vivas mientras se consume (como conexiones a donde debe publicar)
+    def _consume(self, queue_name, on_message_callback, keep_alive):
         if self._is_consuming:
             raise MessageMiddlewareMessageError(ALREADY_CONSUMING_MSG)
         action = f"consuming from {queue_name}"
@@ -72,6 +80,8 @@ class _MessageMiddlewareRabbitMQBase:
                 auto_ack=False,
             )
             self._is_consuming = True
+            self._keep_alive = keep_alive
+            self._schedule_keep_alive()
             self._channel.start_consuming()
         except AMQPConnectionError as e:
             raise MessageMiddlewareDisconnectedError(DISCONNECTED_MSG.format(action, e)) from e
@@ -79,6 +89,41 @@ class _MessageMiddlewareRabbitMQBase:
             raise MessageMiddlewareMessageError(RABBITMQ_ERROR_MSG.format(action, e)) from e
         finally:
             self._is_consuming = False
+            self._cancel_keep_alive()
+            
+    # Con BlockingConnection, pika solo responde los heartbeats de una conexión cuando se
+    # la usa. Una conexión que pasa mucho tiempo sin publicar no responde y el broker 
+    # termina cerrándola. Por eso, mientras se consume, se atienden periódicamente las 
+    # conexiones de keep_alive
+    def _keep_alive_connections(self):
+        self._keep_alive_timer = None
+        for middleware in self._keep_alive:
+            middleware.process_pending_events()
+        if self._is_consuming:
+            self._schedule_keep_alive()
+
+    def _schedule_keep_alive(self):
+        if self._keep_alive:
+            self._keep_alive_timer = self._connection.call_later(KEEP_ALIVE_INTERVAL, self._keep_alive_connections)
+
+    def _cancel_keep_alive(self):
+        self._keep_alive = []
+        if self._keep_alive_timer is None:
+            return
+        try:
+            if self._connection.is_open:
+                self._connection.remove_timeout(self._keep_alive_timer)
+        except AMQPError as e:
+            logging.warning(f"Error while cancelling keep alive timer: {e!r}")
+        self._keep_alive_timer = None
+
+    # Deja que pika procese lo pendiente de la conexión (heartbeats incluidos) sin esperar
+    def process_pending_events(self):
+        try:
+            if self._connection is not None and self._connection.is_open:
+                self._connection.process_data_events(time_limit=0)
+        except AMQPError as e:
+            logging.warning(f"Error while keeping RabbitMQ connection alive: {e!r}")
 
     def stop_consuming(self):
         if not self._is_consuming:
@@ -139,8 +184,8 @@ class MessageMiddlewareQueueRabbitMQ(_MessageMiddlewareRabbitMQBase, MessageMidd
     def _declare(self):
         self._channel.queue_declare(queue=self._queue_name, durable=True)
 
-    def start_consuming(self, on_message_callback):
-        self._consume(self._queue_name, on_message_callback)
+    def start_consuming(self, on_message_callback, keep_alive=()):
+        self._consume(self._queue_name, on_message_callback, list(keep_alive))
 
     def send(self, message):
         action = f"sending to queue {self._queue_name}"
@@ -205,10 +250,10 @@ class MessageMiddlewareExchangeRabbitMQ(_MessageMiddlewareRabbitMQBase, MessageM
 
     # Si no existia la cola, se declara una unica vez, evitando que se creen nuevas y queden colas 
     # anteriores sin borrarse tras cada llamado mientras la conexión sigue viva
-    def start_consuming(self, on_message_callback):
+    def start_consuming(self, on_message_callback, keep_alive=()):
         if self._queue_name is None:
             self._declare_anonymous_queue()
-        self._consume(self._queue_name, on_message_callback)
+        self._consume(self._queue_name, on_message_callback, list(keep_alive))
 
     # Publica a cada routing_key del exchange
     def send(self, message):

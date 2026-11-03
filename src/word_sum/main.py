@@ -19,6 +19,8 @@ Q5_JOINER_GROUP = os.environ["Q5_JOINER_GROUP"]
 
 
 Q5_JOINER_AMOUNT = 1
+
+# Para Q5. Hasta este año inclusive se usa para el promedio, y después se filtra
 LAST_OLD_YEAR = 2020
 
 # Posición de cada idioma en el conteo que se envía a los aggregators ([total, n_en, n_fr])
@@ -66,7 +68,6 @@ class WordSum:
             if language_index is not None:
                 counts_by_word[word][language_index] += 1
 
-    
     def _process_data(self, client_id, records):
         counts_by_word = {}
         old_lengths = []
@@ -119,7 +120,7 @@ class WordSum:
 
     def start(self):
         try:
-            self._input.start_consuming(self._process_message)
+            self._input.start_consuming(self._process_message, [self._aggregators, self._word_counters, self._q5_joiner])
         finally:
             self._close()
 
