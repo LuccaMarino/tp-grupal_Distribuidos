@@ -16,7 +16,13 @@ SERVER_HOST = os.environ["SERVER_HOST"]
 SERVER_PORT = int(os.environ["SERVER_PORT"])
 PARSER_AMOUNT = int(os.environ["PARSER_AMOUNT"])
 IMAGE_DOWNLOADER_AMOUNT = int(os.environ["IMAGE_DOWNLOADER_AMOUNT"])
+Q3_AGGREGATOR_AMOUNT = int(os.environ["Q3_AGGREGATOR_AMOUNT"])
 GATEWAY_ID = 0 #Por ahora solo tenemos un gateway
+EXPECTED_QUERY_EOFS = {
+    message_protocol.internal.Query.Q1: PARSER_AMOUNT,
+    message_protocol.internal.Query.Q2: IMAGE_DOWNLOADER_AMOUNT * PARSER_AMOUNT,
+    message_protocol.internal.Query.Q3: Q3_AGGREGATOR_AMOUNT,
+}
 
 class ClientConnection:
     def __init__(self, client_socket, message_handler):
@@ -71,27 +77,27 @@ def handle_client_request(connection):
 
 
 def delete_condition_ready(client_id, ended_querys):
-    if not ended_querys[client_id].get(message_protocol.internal.Query.Q2) or not ended_querys[client_id].get(message_protocol.internal.Query.Q1):
-        return False
-    return (len(ended_querys[client_id][message_protocol.internal.Query.Q2]) == IMAGE_DOWNLOADER_AMOUNT * PARSER_AMOUNT
-            and len(ended_querys[client_id][message_protocol.internal.Query.Q1]) == PARSER_AMOUNT)
+    for query, expected_eofs in EXPECTED_QUERY_EOFS.items():
+        if query not in ended_querys[client_id]:
+            return False
+        if len(ended_querys[client_id][query]) < expected_eofs:
+            return False
+    return True
 
 
 def handle_query_eof(outgoing, ended_querys, client_id, query, sender_id):
+    if query not in EXPECTED_QUERY_EOFS:
+        outgoing.put((message_protocol.external.MsgType.END_OF_QUERY_RESULTS, query))
+        return
     if client_id not in ended_querys:
         ended_querys[client_id] = {}
-    if query == message_protocol.internal.Query.Q1 or query == message_protocol.internal.Query.Q2:
-        if query not in ended_querys[client_id]:
-            ended_querys[client_id][query] = set()
-        ended_querys[client_id][query].add(sender_id)
-        if query == message_protocol.internal.Query.Q1 and len(ended_querys[client_id][query]) == PARSER_AMOUNT:
-            outgoing.put((message_protocol.external.MsgType.END_OF_QUERY_RESULTS,query))
-        if query == message_protocol.internal.Query.Q2 and len(ended_querys[client_id][query]) == (IMAGE_DOWNLOADER_AMOUNT * PARSER_AMOUNT):
-            outgoing.put((message_protocol.external.MsgType.END_OF_QUERY_RESULTS,query))
+    if query not in ended_querys[client_id]:
+        ended_querys[client_id][query] = set()
+    ended_querys[client_id][query].add(sender_id)
+    if len(ended_querys[client_id][query]) == EXPECTED_QUERY_EOFS[query]:
+        outgoing.put((message_protocol.external.MsgType.END_OF_QUERY_RESULTS, query))
         if delete_condition_ready(client_id, ended_querys):
             del ended_querys[client_id]
-    else:
-        outgoing.put((message_protocol.external.MsgType.END_OF_QUERY_RESULTS,query))
 
 
 def handle_client_response(client_list, client_lock, consumer_controller):

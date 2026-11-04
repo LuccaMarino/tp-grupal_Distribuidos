@@ -25,7 +25,7 @@ def _top_order(word_count):
     return (-word_count[COUNT_INDEX], word_count[WORD_INDEX])
 
 
-class WordJoiner:
+class Q4Joiner:
     def __init__(self):
         self._input = GroupMember(MOM_HOST, INPUT_GROUP, ID)
         self._results = GroupSender(MOM_HOST, RESULTS_GROUP, GATEWAY_AMOUNT)
@@ -44,18 +44,15 @@ class WordJoiner:
             except MessageMiddlewareCloseError as e:
                 logging.error(e)
 
-    # Las palabras compartidas (Q3) se reenvían directo al gateway sin guardarlas.
-    # Si se recibió un top 20 local, actualiza el top global de este cliente
+    # Actualiza el top global de este cliente con el top 20 local de un aggregator
     def _process_query_result(self, client_id, query, records):
-        if query == message_protocol.internal.Query.Q3:
-            self._results.send(message_protocol.internal.serialize_query_result(client_id, query, records))
-        elif query == message_protocol.internal.Query.Q4:
-            if client_id not in self._tops_by_client:
-                self._tops_by_client[client_id] = []
-            current_top = self._tops_by_client[client_id]
-            self._tops_by_client[client_id] = self._top_words(current_top + records)
-        else:
+        if query != message_protocol.internal.Query.Q4:
             logging.error(f"Discarding result of unexpected query {query}")
+            return
+        if client_id not in self._tops_by_client:
+            self._tops_by_client[client_id] = []
+        current_top = self._tops_by_client[client_id]
+        self._tops_by_client[client_id] = self._top_words(current_top + records)
 
     # Guarda los sender_id por cada EOF recibido. Si llegaron de todos 
     # los aggregators para este cliente, se lo flushea
@@ -72,15 +69,13 @@ class WordJoiner:
         sorted_words = sorted(candidates, key=_top_order)
         return sorted_words[:TOP_SIZE]
 
-    # Envía el top 20 global y cierra Q3 y Q4, liberando el estado del cliente.
-    # De Q3 solo manda el EOF porque ya se enviaron todas las palabras compartidas 
+    # Envía el top 20 global y el eof de Q4 al gateway, y libera el estado del cliente
     def _flush_client(self, client_id):
         top = self._tops_by_client.pop(client_id, [])
         self._eofs_by_client.pop(client_id)
         logging.info(f"Client {client_id} finished: sending top {len(top)}")
         self._results.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q4, top))
         self._results.send(message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q4, ID))
-        self._results.send(message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q3, ID))
 
     
     def _process_message(self, message, ack, nack):
@@ -105,9 +100,9 @@ class WordJoiner:
 
 def main():
     logging.basicConfig(level=logging.INFO)
-    logging.info("Starting word joiner service...")
-    word_joiner = WordJoiner()
-    word_joiner.start()
+    logging.info("Starting q4 joiner service...")
+    q4_joiner = Q4Joiner()
+    q4_joiner.start()
     return 0
 
 

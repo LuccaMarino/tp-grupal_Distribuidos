@@ -30,7 +30,8 @@ services:
       SERVER_HOST: "gateway"
       SERVER_PORT: "5678"
       PARSER_AMOUNT: 3
-      IMAGE_DOWNLOADER_AMOUNT : 1
+      IMAGE_DOWNLOADER_AMOUNT: 1
+      Q3_AGGREGATOR_AMOUNT: 2
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -146,8 +147,10 @@ services:
       ID: "0"
       MOM_HOST: "rabbitmq"
       INPUT_GROUP: "abstracts_group"
-      AGGREGATOR_GROUP: "word_aggregators_group"
-      AGGREGATOR_AMOUNT: 2
+      Q3_AGGREGATOR_GROUP: "q3_aggregators_group"
+      Q3_AGGREGATOR_AMOUNT: 2
+      Q4_AGGREGATOR_GROUP: "q4_aggregators_group"
+      Q4_AGGREGATOR_AMOUNT: 2
       WORD_COUNTER_GROUP: "word_counters_group"
       WORD_COUNTER_AMOUNT: 3
       Q5_JOINER_GROUP: "q5_joiner_group"
@@ -165,8 +168,10 @@ services:
       ID: "1"
       MOM_HOST: "rabbitmq"
       INPUT_GROUP: "abstracts_group"
-      AGGREGATOR_GROUP: "word_aggregators_group"
-      AGGREGATOR_AMOUNT: 2
+      Q3_AGGREGATOR_GROUP: "q3_aggregators_group"
+      Q3_AGGREGATOR_AMOUNT: 2
+      Q4_AGGREGATOR_GROUP: "q4_aggregators_group"
+      Q4_AGGREGATOR_AMOUNT: 2
       WORD_COUNTER_GROUP: "word_counters_group"
       WORD_COUNTER_AMOUNT: 3
       Q5_JOINER_GROUP: "q5_joiner_group"
@@ -184,8 +189,10 @@ services:
       ID: "2"
       MOM_HOST: "rabbitmq"
       INPUT_GROUP: "abstracts_group"
-      AGGREGATOR_GROUP: "word_aggregators_group"
-      AGGREGATOR_AMOUNT: 2
+      Q3_AGGREGATOR_GROUP: "q3_aggregators_group"
+      Q3_AGGREGATOR_AMOUNT: 2
+      Q4_AGGREGATOR_GROUP: "q4_aggregators_group"
+      Q4_AGGREGATOR_AMOUNT: 2
       WORD_COUNTER_GROUP: "word_counters_group"
       WORD_COUNTER_AMOUNT: 3
       Q5_JOINER_GROUP: "q5_joiner_group"
@@ -194,16 +201,17 @@ services:
       rabbitmq:
         condition: service_healthy
 
-  word_aggregator_0:
+  q3_aggregator_0:
     build:
       context: ./src/
-      dockerfile: word_aggregator/Dockerfile
-    container_name: word_aggregator_0
+      dockerfile: q3_aggregator/Dockerfile
+    container_name: q3_aggregator_0
     environment:
       ID: "0"
       MOM_HOST: "rabbitmq"
-      INPUT_GROUP: "word_aggregators_group"
-      JOINER_GROUP: "word_joiner_group"
+      INPUT_GROUP: "q3_aggregators_group"
+      RESULTS_GROUP: "results_group"
+      GATEWAY_AMOUNT: 1
       PARSER_AMOUNT: 3
       WORD_SUM_AMOUNT: 3
       PYTHONUNBUFFERED: "1"
@@ -211,16 +219,17 @@ services:
       rabbitmq:
         condition: service_healthy
 
-  word_aggregator_1:
+  q3_aggregator_1:
     build:
       context: ./src/
-      dockerfile: word_aggregator/Dockerfile
-    container_name: word_aggregator_1
+      dockerfile: q3_aggregator/Dockerfile
+    container_name: q3_aggregator_1
     environment:
       ID: "1"
       MOM_HOST: "rabbitmq"
-      INPUT_GROUP: "word_aggregators_group"
-      JOINER_GROUP: "word_joiner_group"
+      INPUT_GROUP: "q3_aggregators_group"
+      RESULTS_GROUP: "results_group"
+      GATEWAY_AMOUNT: 1
       PARSER_AMOUNT: 3
       WORD_SUM_AMOUNT: 3
       PYTHONUNBUFFERED: "1"
@@ -228,15 +237,49 @@ services:
       rabbitmq:
         condition: service_healthy
 
-  word_joiner_0:
+  q4_aggregator_0:
     build:
       context: ./src/
-      dockerfile: word_joiner/Dockerfile
-    container_name: word_joiner_0
+      dockerfile: q4_aggregator/Dockerfile
+    container_name: q4_aggregator_0
     environment:
       ID: "0"
       MOM_HOST: "rabbitmq"
-      INPUT_GROUP: "word_joiner_group"
+      INPUT_GROUP: "q4_aggregators_group"
+      JOINER_GROUP: "q4_joiner_group"
+      PARSER_AMOUNT: 3
+      WORD_SUM_AMOUNT: 3
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  q4_aggregator_1:
+    build:
+      context: ./src/
+      dockerfile: q4_aggregator/Dockerfile
+    container_name: q4_aggregator_1
+    environment:
+      ID: "1"
+      MOM_HOST: "rabbitmq"
+      INPUT_GROUP: "q4_aggregators_group"
+      JOINER_GROUP: "q4_joiner_group"
+      PARSER_AMOUNT: 3
+      WORD_SUM_AMOUNT: 3
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  q4_joiner_0:
+    build:
+      context: ./src/
+      dockerfile: q4_joiner/Dockerfile
+    container_name: q4_joiner_0
+    environment:
+      ID: "0"
+      MOM_HOST: "rabbitmq"
+      INPUT_GROUP: "q4_joiner_group"
       RESULTS_GROUP: "results_group"
       GATEWAY_AMOUNT: 1
       AGGREGATOR_AMOUNT: 2
