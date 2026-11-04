@@ -63,11 +63,6 @@ class GroupSender:
     def broadcast(self, message):
         self._exchange.send(message)
         
-    # Atiende la conexión sin enviar nada, para que no se cierre por inactividad.
-    # La usa un GroupMember que recibe a este emisor en start_consuming(..., keep_alive)
-    def process_pending_events(self):
-        self._exchange.process_pending_events()
-        
     def close(self):
         self._exchange.close()
 
@@ -96,13 +91,8 @@ class GroupMember:
             host, group_name, [queue_name], queue_name=queue_name, prefetch_count=prefetch_count
         )
 
-    def process_pending_events(self):
-        self._exchange.process_pending_events()
-
-    # keep_alive son emisores del nodo que pueden pasar mucho tiempo sin enviar. 
-    # Mientras se consume se mantienen sus conexiones vivas
-    def start_consuming(self, on_message_callback, keep_alive=()):
-        self._exchange.start_consuming(on_message_callback, keep_alive)
+    def start_consuming(self, on_message_callback):
+        self._exchange.start_consuming(on_message_callback)
 
     def stop_consuming(self):
         self._exchange.stop_consuming()

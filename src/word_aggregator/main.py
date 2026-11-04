@@ -90,18 +90,14 @@ class WordAggregator:
     def _send_shared_words(self, client_id, counts_by_word):
         batch = []
         sent_amount = 0
-        for i, (word, counts) in enumerate(counts_by_word.items()):
+        for word, counts in counts_by_word.items():
             if counts[EN_INDEX] > 0 and counts[FR_INDEX] > 0:
                 batch.append([word])
                 if len(batch) == SHARED_BATCH_SIZE:
                     self._send_shared_batch(client_id, batch)
                     sent_amount += len(batch)
                     batch = []
-            # Mantiene las conexiones activas antes de mandar batches
-            if i % 5000 == 0:
-                self._input.process_pending_events()
-                self._joiner.process_pending_events()
-        if batch:
+        if batch:   # si el ultimo batch es incompleto, se manda igual
             self._send_shared_batch(client_id, batch)
             sent_amount += len(batch)
         return sent_amount
@@ -113,8 +109,6 @@ class WordAggregator:
     def _flush_client(self, client_id):
         counts_by_word = self._counts_by_client.pop(client_id, {})
         self._eofs_by_client.pop(client_id)
-        self._input.process_pending_events()
-        self._joiner.process_pending_events()
         top = self._top_words(counts_by_word)
         shared_amount = self._send_shared_words(client_id, counts_by_word)
         self._joiner.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q4, top))
@@ -136,7 +130,7 @@ class WordAggregator:
 
     def start(self):
         try:
-            self._input.start_consuming(self._process_message, [self._joiner])
+            self._input.start_consuming(self._process_message)
         finally:
             self._close()
 
