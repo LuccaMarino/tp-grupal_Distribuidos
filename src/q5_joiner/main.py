@@ -21,7 +21,6 @@ class Q5Joiner:
     def __init__(self):
         self._new_articles = GroupMember(MOM_HOST, NEW_ARTICLES_GROUP, ID)
         self._sum_partial_length = GroupMember(MOM_HOST, SUM_PARTIAL_LENGTH_GROUP, ID)
-        self._results_sender = None
         self._global_stats = {}  # client_id -> [total_words, total_articles]
         self._received_word_sum_eofs = {}
         self._received_word_counter_eofs = {}
@@ -35,7 +34,7 @@ class Q5Joiner:
         self._sum_partial_length.stop_consuming_threadsafe()
 
     def _close(self):
-        for connection in (self._new_articles, self._sum_partial_length, self._results_sender):
+        for connection in (self._new_articles, self._sum_partial_length):
             try:
                 connection.close()
             except MessageMiddlewareCloseError as e:
@@ -86,8 +85,7 @@ class Q5Joiner:
         total_words, total_articles = self._global_stats.get(client_id, [0, 0])
         old_articles_average = (total_words / total_articles) if total_articles > 0 else 0.0
         file_path = self._client_file_path(client_id)
-        if self._results_sender is None:
-            self._results_sender = GroupSender(MOM_HOST, RESULTS_GROUP, GATEWAY_AMOUNT)
+        results_sender = GroupSender(MOM_HOST, RESULTS_GROUP, GATEWAY_AMOUNT)
         if os.path.exists(file_path):
             with open(file_path, "r") as f:
                 batch = []
@@ -98,14 +96,18 @@ class Q5Joiner:
                         batch.append([url, length])
                         if len(batch) >= BATCH_SIZE:
                             result_message = message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q5, batch)
-                            self._results_sender.send(result_message)
+                            results_sender.send(result_message)
                             batch = []
                 if batch:
                     result_message = message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q5, batch)
-                    self._results_sender.send(result_message)
+                    results_sender.send(result_message)
             os.remove(file_path)
         eof_message = message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q5, ID)
-        self._results_sender.broadcast(eof_message)
+        results_sender.broadcast(eof_message)
+        try:
+            results_sender.close()
+        except MessageMiddlewareCloseError as e:
+            logging.error(e)
         self._global_stats.pop(client_id, None)
         self._received_word_sum_eofs.pop(client_id, None)
         self._received_word_counter_eofs.pop(client_id, None)

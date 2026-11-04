@@ -30,7 +30,6 @@ def _top_order(word_total):
 class Q4Aggregator:
     def __init__(self):
         self._input = GroupMember(MOM_HOST, INPUT_GROUP, ID)
-        self._joiner = GroupSender(MOM_HOST, JOINER_GROUP, JOINER_AMOUNT)
         self._totals_by_client = {} # client_id -> {palabra: total}
         self._eofs_by_client = {}   # client_id -> set con los sender_id de los EOF recibidos
         signal.signal(signal.SIGTERM, self._handle_sigterm)
@@ -40,11 +39,10 @@ class Q4Aggregator:
         self._input.stop_consuming_threadsafe()
 
     def _close(self):
-        for connection in (self._input, self._joiner):
-            try:
-                connection.close()
-            except MessageMiddlewareCloseError as e:
-                logging.error(e)
+        try:
+            self._input.close()
+        except MessageMiddlewareCloseError as e:
+            logging.error(e)
 
     # Suma los totales. Cada registro es [palabra, total]
     def _process_data(self, client_id, records):
@@ -75,14 +73,24 @@ class Q4Aggregator:
         return top
 
     # Envía el top 20 local y el EOF al joiner, y libera el estado del cliente.
+    # La conexion de salida se abre recién aca y se cierra al terminar el flush, ya que
+    # este nodo solo puede enviar cuando tiene todos los datos. Si se abre desde el
+    # inicio quedaría ociosa y el broker podría cerrarla por heartbeat
     def _flush_client(self, client_id):
         totals_by_word = self._totals_by_client.pop(client_id, {})
         self._eofs_by_client.pop(client_id)
         top = self._top_words(totals_by_word)
-        self._joiner.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q4, top))
-        self._joiner.send(message_protocol.internal.serialize_eof(client_id, ID))
+        joiner = GroupSender(MOM_HOST, JOINER_GROUP, JOINER_AMOUNT)
+        try:
+            joiner.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q4, top))
+            joiner.send(message_protocol.internal.serialize_eof(client_id, ID))
+        finally:
+            try:
+                joiner.close()
+            except MessageMiddlewareCloseError as e:
+                logging.error(e)
         logging.info(f"Client {client_id} finished: sent top {len(top)}")
-        
+
     def _process_message(self, message, ack, nack):
         try:
             msg_type, client_id, args = message_protocol.internal.deserialize(message)
