@@ -42,6 +42,8 @@ class Parser:
 
     def extract_sections(self, sections_raw):
         section_names = set()
+        if sections_raw is None or (isinstance(sections_raw, str) and not sections_raw.strip()):
+            return section_names
         try:
             sections_raw = json.loads(sections_raw)
         except Exception as e:
@@ -95,20 +97,18 @@ class Parser:
         #print(result)
         return result
 
-    def consume_article(self, client_id, article):
+    def consume_article(self,article, q1, q2, q3):
         try:
             article_fields = self.extract_article_fields(article)
             if article_fields.get("year") is not None and article_fields["year"] <= 2020 and article_fields.get("language") == "en" and article_fields.get("date_modified"):
-                self.q1_group.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q1, [[article_fields["url"], article_fields["date_modified"]]]))
+                q1.append([article_fields["url"], article_fields["date_modified"]])
             if article_fields["biography"] == True and article_fields.get("year") is not None and article_fields["year"] <= 2020 and article_fields.get("image_url"):
-                #logging.info(f"SENDING biography article to q2: {article_fields['name']} ({article_fields['url']})")
-                self.q2_group.send(message_protocol.internal.serialize_data(client_id, [article_fields["name"], article_fields["url"], article_fields["image_url"]]))
-                self.q2_sent += 1
-                logging.info("Q2_SENT count=%d name=%s",self.q2_sent,article_fields["name"])
-            if article_fields.get("language") and article_fields.get("year") is not None and  article_fields.get("url") and article_fields.get("abstract"):
-                self.abstract_group.send(message_protocol.internal.serialize_data(client_id, [[article_fields.get("language"), article_fields.get("year"), article_fields.get("url"), article_fields.get("abstract")]]))      
+                q2.append([article_fields["name"], article_fields["url"], article_fields["image_url"]])
+            if article_fields.get("language") and article_fields.get("year") is not None and article_fields.get("url") and article_fields.get("abstract"):
+                q3.append([article_fields.get("language"), article_fields.get("year"), article_fields.get("url"), article_fields.get("abstract")])
         except Exception:
             logging.exception("Error processing article message")
+
 
     def consume_eof(self, client_id):
         try:
@@ -129,15 +129,25 @@ class Parser:
             elif msg_type == message_protocol.internal.MsgType.DATA:
                 if len(args) != 1 or not isinstance(args[0], list):
                     raise ValueError("Expected a list of articles in the parser input message")
+                q1_results = []
+                q2_results = []
+                abstract_results = []
                 for article in args[0]:
                     if not isinstance(article, dict):
                         raise ValueError("Expected each parser input article to be an object")
-                    self.consume_article(client_id, article)
+                    self.consume_article(article, q1_results, q2_results, abstract_results)
+                if q1_results:
+                    self.q1_group.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q1, q1_results))
+                if q2_results:
+                    for image_record in q2_results:
+                        self.q2_group.send(message_protocol.internal.serialize_data(client_id, [image_record]))
+                if abstract_results:
+                    self.abstract_group.send(message_protocol.internal.serialize_data(client_id, abstract_results))
             else:
                 raise ValueError(f"Unexpected parser input message type: {msg_type}")
             ack()
-        except Exception:
-            logging.exception("Error decoding parser input message")
+        except Exception as e:
+            logging.exception("Error decoding parser input message for client %s: %s", client_id, e)
             nack()
 
     def start(self):

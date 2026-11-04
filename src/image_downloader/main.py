@@ -16,7 +16,7 @@ ID = os.environ["ID"]
 GATEWAY_AMOUNT = int(os.environ["GATEWAY_AMOUNT"])
 USER_AGENT = "WikipediaAnalysisBot/1.0 (contact: pciliberto@fi.uba.ar)"
 RATE_LIMITING_DELAY = 0.125  # 8 requests per second
-
+MAX_IMAGES = 4
 class ImageDownloader:
     def __init__(self):
         self.output_group = GroupSender(MOM_HOST, OUTPUT_GROUP, GATEWAY_AMOUNT)
@@ -70,20 +70,24 @@ class ImageDownloader:
         logging.info("Sent EOF message to output group")
 
     def consume_image(self, client_id, fields):
-        logging.info("Received image download request")
         try:
-            for name, url, image_url in fields:
+            images = []
+            for [name, url, image_url] in fields:
                 success, image_content = self.download_image(image_url)
                 if success:
                     image_content_b64 = base64.b64encode(image_content).decode("ascii")
                 else:
                     image_content_b64 = image_content
-                self.output_group.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q2, [[name, url, image_content_b64]]))
+                images.append([name, url, image_content_b64])
                 time.sleep(RATE_LIMITING_DELAY)
+                if len(images) >= MAX_IMAGES:
+                    self.output_group.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q2, images))
+                    images = []
+            self.output_group.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q2, images))
         except requests.HTTPError as e:
             logging.warning("Downloading image failed for %s (%s): %s", url, image_url, e)
-        except Exception:
-            logging.exception("Error processing image download request")
+        except Exception as e:
+            logging.exception("Error processing image download request for client %s: %s", client_id, e)
 
     def consume_message(self, message, ack, _nack):
         try:
@@ -92,13 +96,16 @@ class ImageDownloader:
                 sender = fields[0]
                 self.consume_eof(client_id, sender)
             elif msg_type == message_protocol.internal.MsgType.DATA:
-                self.consume_image(client_id, fields)
+                if len(fields) != 1 or not isinstance(fields[0], list):
+                    raise ValueError("Expected a list of image download records")
+                if len(fields[0]) > 1:
+                    raise ValueError("Expected at most one image per download message")
+                self.consume_image(client_id, fields[0])
             else:
-                logging.error("Unexpected message type for image download request")
-                raise ValueError("Unexpected message type for image download request")
+                raise ValueError(f"Unexpected message type for image download request: {msg_type}")
             ack()
-        except Exception:
-            logging.exception("Error processing image download request")
+        except Exception as e:
+            logging.exception("Error processing image download request for client %s: %s", client_id, e)
             _nack()
 
     def start(self):

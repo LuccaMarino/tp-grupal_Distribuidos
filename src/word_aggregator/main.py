@@ -17,7 +17,7 @@ JOINER_AMOUNT = 1
 TOP_SIZE = 20
 
 # Cantidad máxima de palabras compartidas (Q3) por mensaje
-SHARED_BATCH_SIZE = 1000
+SHARED_BATCH_SIZE = 50
 
 # Cada word_sum reenvía el EOF de cada parser, así que llega uno por 
 # cada par parser-word_sum
