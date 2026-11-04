@@ -76,14 +76,13 @@ class WordJoiner:
     # De Q3 solo manda el EOF porque ya se enviaron todas las palabras compartidas 
     def _flush_client(self, client_id):
         top = self._tops_by_client.pop(client_id, [])
-        self._eofs_by_client.pop(client_id, None)
-        self._input.process_pending_events()
-        self._results.process_pending_events()
+        self._eofs_by_client.pop(client_id)
         logging.info(f"Client {client_id} finished: sending top {len(top)}")
         self._results.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q4, top))
         self._results.send(message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q4, ID))
         self._results.send(message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q3, ID))
 
+    
     def _process_message(self, message, ack, nack):
         try:
             msg_type, client_id, args = message_protocol.internal.deserialize(message)
@@ -99,7 +98,7 @@ class WordJoiner:
 
     def start(self):
         try:
-            self._input.start_consuming(self._process_message, [self._results])
+            self._input.start_consuming(self._process_message)
         finally:
             self._close()
 
