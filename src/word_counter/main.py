@@ -12,6 +12,7 @@ INPUT_GROUP = os.environ["INPUT_GROUP"]
 SUM_PARTIAL_LENGTH_GROUP = os.environ["SUM_PARTIAL_LENGTH_GROUP"]
 Q5_JOINER_AMOUNT = int(os.environ["Q5_JOINER_AMOUNT"])
 EXPECTED_EOFS = int(os.environ["EXPECTED_EOFS"])
+SUM_PARTIAL_LENGTH = int(os.environ["SUM_PARTIAL_LENGTH"])
 
 class WordCounter:
     def __init__(self):
@@ -37,6 +38,11 @@ class WordCounter:
             self._stats[client_id] = [0, 0]
         self._stats[client_id][0] += sum(records)
         self._stats[client_id][1] += len(records)
+        if self._stats[client_id][1] >= SUM_PARTIAL_LENGTH:
+            total_words, total_articles = self._stats[client_id]
+            data_message = message_protocol.internal.serialize_data(client_id, [total_words, total_articles])
+            self._sum_partial_length.send(data_message)
+            self._stats[client_id] = [0, 0]
 
     def _process_eof(self, client_id, sender_id):
         logging.info(f"Received EOF from sender {sender_id} for client {client_id}")

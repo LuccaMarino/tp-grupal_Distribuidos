@@ -4,7 +4,7 @@ x-client-env: &client-env
   SERVER_PORT: "5678"
   RETRY_COUNT: "5"
   DELAY_BETWEEN_RETRIES: "1"
-  BATCH_SIZE: "100"
+  BATCH_SIZE: "50"
 
 x-client-base: &client-base
   build:
@@ -301,6 +301,7 @@ services:
       Q5_JOINER_AMOUNT: 1
       # EXPECTED_EOFS = PARSER_AMOUNT (3) * WORD_SUM_AMOUNT (3)
       EXPECTED_EOFS: 9
+      SUM_PARTIAL_LENGTH: 100
       PYTHONUNBUFFERED: "1"
     depends_on:
       rabbitmq:
@@ -318,6 +319,7 @@ services:
       SUM_PARTIAL_LENGTH_GROUP: "sum_partial_length_group"
       Q5_JOINER_AMOUNT: 1
       # EXPECTED_EOFS = PARSER_AMOUNT (3) * WORD_SUM_AMOUNT (3)
+      SUM_PARTIAL_LENGTH: 100
       EXPECTED_EOFS: 9
       PYTHONUNBUFFERED: "1"
     depends_on:
@@ -336,6 +338,7 @@ services:
       SUM_PARTIAL_LENGTH_GROUP: "sum_partial_length_group"
       Q5_JOINER_AMOUNT: 1
       # EXPECTED_EOFS = PARSER_AMOUNT (3) * WORD_SUM_AMOUNT (3)
+      SUM_PARTIAL_LENGTH: 100
       EXPECTED_EOFS: 9
       PYTHONUNBUFFERED: "1"
     depends_on:
@@ -359,6 +362,7 @@ services:
       EXPECTED_WORDCOUNTER_EOFS: 3 # WORD_COUNTER_AMOUNT (3)
       GATEWAY_AMOUNT: 1
       STORAGE_PATH: "/new_articles"
+      BATCH_SIZE: 100
       PYTHONUNBUFFERED: "1"
     depends_on:
       rabbitmq:
