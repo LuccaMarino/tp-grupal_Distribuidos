@@ -40,6 +40,7 @@ class WordAggregator:
         self._input = GroupMember(MOM_HOST, INPUT_GROUP, ID)
         self._joiner = GroupSender(MOM_HOST, JOINER_GROUP, JOINER_AMOUNT)
         self._counts_by_client = {} # client_id -> {palabra: [total, n_en, n_fr]}
+        self._shared_amount_by_client = {}  # client_id -> cantidad de palabras compartidas ya enviadas
         self._eofs_by_client = {}   # client_id -> set con los sender_id de los EOF recibidos
         signal.signal(signal.SIGTERM, self._handle_sigterm)
 
@@ -55,17 +56,27 @@ class WordAggregator:
                 logging.error(e)
 
     # Actualiza los conteos. Cada registro es [palabra, total, n_en, n_fr]
+    # Las palabras que con este mensaje pasan a aparecer en inglés y en francés
+    # se envían en el momento (para Q3), sin esperar al EOF
     def _process_data(self, client_id, records):
         if client_id not in self._counts_by_client:
             self._counts_by_client[client_id] = {}
+            self._shared_amount_by_client[client_id] = 0
         counts_by_word = self._counts_by_client[client_id]
+        new_shared_words = []
         for word, total, n_en, n_fr in records:
             if word not in counts_by_word:
                 counts_by_word[word] = [0, 0, 0]
             counts = counts_by_word[word]
+            was_shared = counts[EN_INDEX] > 0 and counts[FR_INDEX] > 0
             counts[TOTAL_INDEX] += total
             counts[EN_INDEX] += n_en
             counts[FR_INDEX] += n_fr
+            is_shared = counts[EN_INDEX] > 0 and counts[FR_INDEX] > 0
+            # solo se manda cuando pasa a ser compartida. Si ya lo estaba, no se hace nada
+            if is_shared and not was_shared:
+                new_shared_words.append([word])
+        self._send_shared_words(client_id, new_shared_words)
 
     # Se guardan los sender_id por cada EOF en un set, así no se cuentan EOFs repetidos.
     # Si llegaron todos los EOFs esperados para este cliente, se flushea el cliente
@@ -85,36 +96,24 @@ class WordAggregator:
             top.append([word, counts[TOTAL_INDEX]])
         return top
 
-    # Envía al joiner las palabras que aparecen en algún abstract en inglés y en
-    # alguno en francés, en mensajes de a SHARED_BATCH_SIZE palabras
-    def _send_shared_words(self, client_id, counts_by_word):
-        batch = []
-        sent_amount = 0
-        for word, counts in counts_by_word.items():
-            if counts[EN_INDEX] > 0 and counts[FR_INDEX] > 0:
-                batch.append([word])
-                if len(batch) == SHARED_BATCH_SIZE:
-                    self._send_shared_batch(client_id, batch)
-                    sent_amount += len(batch)
-                    batch = []
-        if batch:   # si el ultimo batch es incompleto, se manda igual
-            self._send_shared_batch(client_id, batch)
-            sent_amount += len(batch)
-        return sent_amount
+    # Envía al joiner las palabras compartidas en mensajes de a lo sumo SHARED_BATCH_SIZE palabras
+    def _send_shared_words(self, client_id, shared_words):
+        for start in range(0, len(shared_words), SHARED_BATCH_SIZE):
+            batch = shared_words[start:start + SHARED_BATCH_SIZE]
+            self._joiner.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q3, batch))
+        self._shared_amount_by_client[client_id] += len(shared_words)
 
-    def _send_shared_batch(self, client_id, batch):
-        self._joiner.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q3, batch))
-
-    # Envía los resultados parciales del cliente al joiner y libera su estado
+    # Envía el top 20 local y el EOF al joiner, y libera el estado del cliente.
+    # Las palabras compartidas ya se enviaron mientras se procesaban los datos
     def _flush_client(self, client_id):
         counts_by_word = self._counts_by_client.pop(client_id, {})
+        shared_amount = self._shared_amount_by_client.pop(client_id, 0)
         self._eofs_by_client.pop(client_id)
         top = self._top_words(counts_by_word)
-        shared_amount = self._send_shared_words(client_id, counts_by_word)
         self._joiner.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q4, top))
         self._joiner.send(message_protocol.internal.serialize_eof(client_id, ID))
         logging.info(f"Client {client_id} finished: sent top {len(top)} and {shared_amount} shared words")
-
+        
     def _process_message(self, message, ack, nack):
         try:
             msg_type, client_id, args = message_protocol.internal.deserialize(message)
