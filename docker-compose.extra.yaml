@@ -9,19 +9,19 @@ x-client-env: &client-env
   BATCH_SIZE: "100"
 
 services:
-  client_10:
+  client_4:
     build:
       context: ./src/
       dockerfile: client/Dockerfile
-    container_name: client_10
+    container_name: client_4
     volumes:
       - ./datasets:/datasets
       - ./output:/output
     environment:
       <<: *client-env
-      OUTPUT_FILE_Q1: "/output/client_10_output_q1.csv"
-      OUTPUT_FILE_Q2: "/output/client_10_output_q2.csv"
-      OUTPUT_FILE_Q3: "/output/client_10_output_q3.csv"
-      OUTPUT_FILE_Q4: "/output/client_10_output_q4.csv"
-      OUTPUT_FILE_Q5: "/output/client_10_output_q5.csv"
-      INPUT_DIR: "/datasets/client_0"
+      OUTPUT_FILE_Q1: "/output/client_4_output_q1.csv"
+      OUTPUT_FILE_Q2: "/output/client_4_output_q2.csv"
+      OUTPUT_FILE_Q3: "/output/client_4_output_q3.csv"
+      OUTPUT_FILE_Q4: "/output/client_4_output_q4.csv"
+      OUTPUT_FILE_Q5: "/output/client_4_output_q5.csv"
+      INPUT_DIR: "/datasets/client_4"
