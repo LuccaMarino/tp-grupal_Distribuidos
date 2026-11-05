@@ -11,8 +11,10 @@ import stopwords
 ID = int(os.environ["ID"])
 MOM_HOST = os.environ["MOM_HOST"]
 INPUT_GROUP = os.environ["INPUT_GROUP"]
-AGGREGATOR_GROUP = os.environ["AGGREGATOR_GROUP"]
-AGGREGATOR_AMOUNT = int(os.environ["AGGREGATOR_AMOUNT"])
+Q3_AGGREGATOR_GROUP = os.environ["Q3_AGGREGATOR_GROUP"]
+Q3_AGGREGATOR_AMOUNT = int(os.environ["Q3_AGGREGATOR_AMOUNT"])
+Q4_AGGREGATOR_GROUP = os.environ["Q4_AGGREGATOR_GROUP"]
+Q4_AGGREGATOR_AMOUNT = int(os.environ["Q4_AGGREGATOR_AMOUNT"])
 WORD_COUNTER_GROUP = os.environ["WORD_COUNTER_GROUP"]
 WORD_COUNTER_AMOUNT = int(os.environ["WORD_COUNTER_AMOUNT"])
 Q5_JOINER_GROUP = os.environ["Q5_JOINER_GROUP"]
@@ -21,9 +23,8 @@ Q5_JOINER_GROUP = os.environ["Q5_JOINER_GROUP"]
 Q5_JOINER_AMOUNT = 1
 LAST_OLD_YEAR = 2020
 
-# Posición de cada idioma en el conteo que se envía a los aggregators ([total, n_en, n_fr])
-TOTAL_INDEX = 0
-LANGUAGE_INDEX = {"en": 1, "fr": 2}
+# Posición de cada idioma en los flags que se envían a los q3_aggregators ([en, fr])
+LANGUAGE_INDEX = {"en": 0, "fr": 1}
 
 WORD_REGEX = re.compile(r"\b\w+\b")
 NUMBER_REGEX = re.compile(r"[+-]?((\d+\.?\d*)|(\.\d+))")
@@ -32,7 +33,8 @@ NUMBER_REGEX = re.compile(r"[+-]?((\d+\.?\d*)|(\.\d+))")
 class WordSum:
     def __init__(self):
         self._input = GroupMember(MOM_HOST, INPUT_GROUP, ID)
-        self._aggregators = GroupSender(MOM_HOST, AGGREGATOR_GROUP, AGGREGATOR_AMOUNT)
+        self._q3_aggregators = GroupSender(MOM_HOST, Q3_AGGREGATOR_GROUP, Q3_AGGREGATOR_AMOUNT)
+        self._q4_aggregators = GroupSender(MOM_HOST, Q4_AGGREGATOR_GROUP, Q4_AGGREGATOR_AMOUNT)
         self._word_counters = GroupSender(MOM_HOST, WORD_COUNTER_GROUP, WORD_COUNTER_AMOUNT)
         self._q5_joiner = GroupSender(MOM_HOST, Q5_JOINER_GROUP, Q5_JOINER_AMOUNT)
         signal.signal(signal.SIGTERM, self._handle_sigterm)
@@ -42,7 +44,7 @@ class WordSum:
         self._input.stop_consuming_threadsafe()
 
     def _close(self):
-        for connection in (self._input, self._aggregators, self._word_counters, self._q5_joiner):
+        for connection in (self._input, self._q3_aggregators, self._q4_aggregators, self._word_counters, self._q5_joiner):
             try:
                 connection.close()
             except MessageMiddlewareCloseError as e:
@@ -56,51 +58,64 @@ class WordSum:
                 words.append(word)
         return words
 
-    # Conteo para Q3 y Q4
-    def _add_counts(self, counts_by_word, lang, words):
+    # Para Q4 cuenta en cuántos abstracts aparece cada palabra, y para Q3 marca
+    # si aparece en algún abstract en inglés y/o en alguno en francés
+    def _add_counts(self, totals_by_word, languages_by_word, lang, words):
         language_index = LANGUAGE_INDEX.get(lang)
         for word in set(words):     # solo importa si la palabra aparece, no cuantas veces
-            if word not in counts_by_word:
-                counts_by_word[word] = [0, 0, 0]
-            counts_by_word[word][TOTAL_INDEX] += 1
+            if word not in totals_by_word:
+                totals_by_word[word] = 0
+            totals_by_word[word] += 1
             if language_index is not None:
-                counts_by_word[word][language_index] += 1
+                if word not in languages_by_word:
+                    languages_by_word[word] = [0, 0]
+                languages_by_word[word][language_index] = 1
 
     
     def _process_data(self, client_id, records):
-        counts_by_word = {}
+        totals_by_word = {}
+        languages_by_word = {}
         old_lengths = []
         new_articles = []
         for lang, year, url, abstract in records:
             words = self._extract_words(abstract)
             # para Q3 y Q4
-            self._add_counts(counts_by_word, lang, words)
+            self._add_counts(totals_by_word, languages_by_word, lang, words)
             # Para Q5, necesita el largo incluyendo repeticiones de palabras
             if year <= LAST_OLD_YEAR:
                 old_lengths.append(len(words))
             else:
                 new_articles.append([url, len(words)])
 
-        def build_counts_message(member_counts):
-            counts_records = []
-            for word, counts in member_counts.items():
-                # cada registro es [palabra, total, n_en, n_fr]
-                counts_records.append([word, counts[0], counts[1], counts[2]])
-            return message_protocol.internal.serialize_data(client_id, counts_records)
+        # cada registro es [palabra, en, fr]
+        def build_languages_message(member_languages):
+            languages_records = []
+            for word, languages in member_languages.items():
+                languages_records.append([word, languages[0], languages[1]])
+            return message_protocol.internal.serialize_data(client_id, languages_records)
 
-        self._aggregators.send_partitioned(counts_by_word, build_counts_message)
+        # cada registro es [palabra, total]
+        def build_totals_message(member_totals):
+            totals_records = []
+            for word, total in member_totals.items():
+                totals_records.append([word, total])
+            return message_protocol.internal.serialize_data(client_id, totals_records)
+
+        self._q3_aggregators.send_partitioned(languages_by_word, build_languages_message)
+        self._q4_aggregators.send_partitioned(totals_by_word, build_totals_message)
         if old_lengths:
             self._word_counters.send(message_protocol.internal.serialize_data(client_id, old_lengths))
         if new_articles:
             self._q5_joiner.send(message_protocol.internal.serialize_data(client_id, new_articles))
-
+        
     # Reenvía el EOF de cada parser a todos los destinos. 
     # Se envia un sender_id que identifica al par parser-word_sum, ya que 
     # cada receptor espera un EOF por cada par
     def _process_eof(self, client_id, parser_id):
         logging.info(f"Received EOF from parser {parser_id} for client {client_id}")
         eof_message = message_protocol.internal.serialize_eof(client_id, f"{parser_id}.{ID}")
-        self._aggregators.broadcast(eof_message)
+        self._q3_aggregators.broadcast(eof_message)
+        self._q4_aggregators.broadcast(eof_message)
         self._word_counters.broadcast(eof_message)
         self._q5_joiner.broadcast(eof_message)
 
