@@ -24,7 +24,7 @@ FLUSH_WORDS = int(os.environ["FLUSH_WORDS"])
 FLUSH_MESSAGES = int(os.environ["FLUSH_MESSAGES"])
 
 # Cantidad máxima de palabras compartidas por mensaje al gateway
-SHARED_BATCH_SIZE = 50
+SHARED_BATCH_SIZE = 100
 
 # Posición de cada idioma en los flags [en, fr] que mandan los word_sum
 EN_INDEX = 0
