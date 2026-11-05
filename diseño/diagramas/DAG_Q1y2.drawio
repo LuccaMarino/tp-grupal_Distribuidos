@@ -1,0 +1,69 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="Page-1" id="osyRtyc20jQXKQiCWsmk">
+    <mxGraphModel dx="1214" dy="586" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="LEU0Y-YuNDsrt3gVNkYV-4" edge="1" parent="1" source="LEU0Y-YuNDsrt3gVNkYV-1" style="edgeStyle=none;curved=1;rounded=0;curveGeometry=1;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=12;defaultLabelBackgroundColor=page;startSize=8;endSize=8;" target="LEU0Y-YuNDsrt3gVNkYV-3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="LEU0Y-YuNDsrt3gVNkYV-5" connectable="0" parent="LEU0Y-YuNDsrt3gVNkYV-4" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];inheritText=1;fontSize=12;defaultLabelBackgroundColor=page;" value="url,abstract,año" vertex="1">
+          <mxGeometry relative="1" x="-0.16" y="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="LEU0Y-YuNDsrt3gVNkYV-1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;roundedPerimeter=1;" value="Source: Dataset" vertex="1">
+          <mxGeometry height="60" width="120" x="490" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="LEU0Y-YuNDsrt3gVNkYV-9" edge="1" parent="1" source="LEU0Y-YuNDsrt3gVNkYV-3" style="edgeStyle=none;curved=1;rounded=0;curveGeometry=1;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=12;defaultLabelBackgroundColor=page;startSize=8;endSize=8;" target="LEU0Y-YuNDsrt3gVNkYV-7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="LEU0Y-YuNDsrt3gVNkYV-14" connectable="0" parent="LEU0Y-YuNDsrt3gVNkYV-9" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];inheritText=1;fontSize=12;defaultLabelBackgroundColor=page;" value="url_imagen,url" vertex="1">
+          <mxGeometry relative="1" x="0.06" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="LEU0Y-YuNDsrt3gVNkYV-15" connectable="0" parent="LEU0Y-YuNDsrt3gVNkYV-9" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];inheritText=1;fontSize=12;defaultLabelBackgroundColor=page;" value="leng: ingles, año≤2020" vertex="1">
+          <mxGeometry relative="1" x="-0.81" as="geometry">
+            <mxPoint y="2" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="LEU0Y-YuNDsrt3gVNkYV-17" connectable="0" parent="LEU0Y-YuNDsrt3gVNkYV-9" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];inheritText=1;fontSize=12;defaultLabelBackgroundColor=page;" value="leng: ingles, año≤2020" vertex="1">
+          <mxGeometry relative="1" x="-0.81" as="geometry">
+            <mxPoint x="-170" y="2" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="LEU0Y-YuNDsrt3gVNkYV-11" edge="1" parent="1" source="LEU0Y-YuNDsrt3gVNkYV-3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=12;defaultLabelBackgroundColor=page;startSize=8;endSize=8;" target="LEU0Y-YuNDsrt3gVNkYV-6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="LEU0Y-YuNDsrt3gVNkYV-12" connectable="0" parent="LEU0Y-YuNDsrt3gVNkYV-11" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];inheritText=1;fontSize=12;defaultLabelBackgroundColor=page;" value="url, fecha de modificacion" vertex="1">
+          <mxGeometry relative="1" x="0.6119" y="-2" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="LEU0Y-YuNDsrt3gVNkYV-3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;roundedPerimeter=1;" value="redireccion de secciones de articulo" vertex="1">
+          <mxGeometry height="60" width="120" x="490" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="LEU0Y-YuNDsrt3gVNkYV-6" parent="1" style="rounded=1;whiteSpace=wrap;html=1;roundedPerimeter=1;" value="Sink: Resultado Q1" vertex="1">
+          <mxGeometry height="60" width="120" x="320" y="400" as="geometry" />
+        </mxCell>
+        <mxCell id="LEU0Y-YuNDsrt3gVNkYV-10" edge="1" parent="1" source="LEU0Y-YuNDsrt3gVNkYV-7" style="edgeStyle=none;curved=1;rounded=0;curveGeometry=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;defaultLabelBackgroundColor=page;startSize=8;endSize=8;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="LEU0Y-YuNDsrt3gVNkYV-8">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="550" y="340" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="LEU0Y-YuNDsrt3gVNkYV-13" connectable="0" parent="LEU0Y-YuNDsrt3gVNkYV-10" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];inheritText=1;fontSize=12;defaultLabelBackgroundColor=page;" value="imagen, url" vertex="1">
+          <mxGeometry relative="1" x="0.2" y="4" as="geometry">
+            <mxPoint x="-4" y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="LEU0Y-YuNDsrt3gVNkYV-7" parent="1" style="rounded=1;whiteSpace=wrap;html=1;roundedPerimeter=1;" value="Busqueda de la imagen con API" vertex="1">
+          <mxGeometry height="60" width="120" x="490" y="290" as="geometry" />
+        </mxCell>
+        <mxCell id="LEU0Y-YuNDsrt3gVNkYV-8" parent="1" style="rounded=1;whiteSpace=wrap;html=1;roundedPerimeter=1;" value="Sink: resultado Q2" vertex="1">
+          <mxGeometry height="60" width="120" x="490" y="400" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

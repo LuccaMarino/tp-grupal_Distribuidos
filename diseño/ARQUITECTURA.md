@@ -59,7 +59,7 @@ Se extrae la fecha, url y url de imagen de cada articulo para responder las quer
 
 ![DAG de Q3 y Q4](diagramas/DAG_Q3y4.png)
 
-El abstract de cada artículo se limpia (se sacan las stopwords) y se cuentan sus palabras por idioma. Esos conteos parciales se suman entre todos los artículos y se obtienen las 20 palabras más usadas (Q4) y las palabras que aparecen en inglés y en francés (Q3).
+El abstract de cada artículo se limpia (se sacan las stopwords) y se registran sus palabras, conciderando idioma para Q3. Esos conteos parciales se suman entre todos los artículos y se obtienen las 20 palabras más usadas (Q4) y las palabras que aparecen en inglés y en francés (Q3).
 
 ### 4.3 Cálculo del promedio y filtrado por largo de abstract (Q5)
 
@@ -76,13 +76,13 @@ Aquí mostramos cómo se comporta el sistema mientras corre: qué pasa y en qué
 
 ![Diagrama de actividades](diagramas/actividades.png)
 
-Como los datos de un cliente se reparten entre varias réplicas, hay que saber cuándo se terminaron todos. Lo mostramos con el `Word aggregator`, que es stateful: recibe los conteos de los `Word sum` y envía al `Word joiner`. El `Word sum`, al ser stateless, no espera a que terminen los `Parser`: envía los conteos de cada lote apenas los calcula y, cada vez que le llega el mensaje de fin (EOF) de un `Parser`, lo reenvía a cada réplica de `Word aggregator`. Cada réplica lo recibe por su propia cola, detrás de los datos, y registra los EOF que llegaron para ese cliente. Cuando llegaron todos (uno por cada par `Parser`–`Word sum`), envía su top 20 parcial y un EOF al `Word joiner`, y libera el estado de ese cliente. El resto de los controles stateful siguen el mismo esquema, cambiando el mecanismo de envío según la tabla de la sección 7.1.
+Como los datos de un cliente se reparten entre varias réplicas, hay que saber cuándo se terminaron todos. Lo mostramos con el `Q4 joiner`, que es stateful: recibe los conteos de los `Q4 aggregator` y envía al `Gateway`. El `Q4 aggregator`, es una , y libera el estado de ese cliente. El resto de los controles stateful siguen el mismo esquema, cambiando el mecanismo de envío según la tabla de la sección 7.1.
 
 ### 5.2 Interacción entre el cliente y el sistema
 
 ![Secuencia general](diagramas/secuencia_gral.png)
 
-El diagrama cómo se comunica un cliente con el sistema y en qué momento recibe cada resultado. Al conectarse, el `Gateway` le asigna un `client_id`, que acompaña a todos sus mensajes dentro del sistema. El cliente envía los artículos en lotes y el `Gateway` los reenvía al sistema. Mientras el cliente sigue enviando, ya pueden volver resultados de Q1 y Q2, porque se resuelven artículo por artículo. Cuando el cliente termina, envía un EOF, que el `Gateway` propaga al sistema. Después de eso se completan los resultados de Q1 y Q2, y llegan los de Q3, Q4 y Q5, que necesitan todos los datos para calcularse. Cuando llegaron las 5 consultas, el `Gateway` le avisa al cliente que terminó.
+El diagrama cómo se comunica un cliente con el sistema y en qué momento recibe cada resultado. Al conectarse, el `Gateway` le asigna un `client_id`, que acompaña a todos sus mensajes dentro del sistema. El cliente envía los artículos en lotes y el `Gateway` los reenvía al sistema. Mientras el cliente sigue enviando, ya pueden volver resultados de Q1, Q2 y Q3, porque se resuelven artículo por artículo y en el caso de Q3 no se necesita el procesamiento de la totalidad de los datos para el envío de resultados. Cuando el cliente termina, envía un EOF, que el `Gateway` propaga al sistema. Después de eso se completan los resultados de Q1, Q2 y Q3, y llegan los de Q4 y Q5, que necesitan todos los datos para calcular. Cuando llegaron las 5 consultas, el `Gateway` le avisa al cliente que terminó.
 
 ## 6. Vista de desarrollo
 
@@ -92,7 +92,7 @@ En esta vista mostramos cómo se organiza le código.
 ![Diagrama de paquetes](diagramas/paquetes.png)
 
 - **`client` y `gateway`** son las dos aplicaciones de entrada y salida.
-- **`controls`** agrupa los 7 controles restantes. Cada uno es una aplicación con su propio `Dockerfile`.
+- **`controls`** agrupa los 8 controles restantes. Cada uno es una aplicación con su propio `Dockerfile`.
 - **`middleware`** oculta RabbitMQ. Sus clases definen cómo se envía y recibe de una cola o de un exchange.
 - **`message_protocol`** define el formato de los mensajes: `external` (entre cliente y gateway) e `internal` (entre controles).
 
@@ -115,27 +115,21 @@ Muestra los controles, las colas entre ellos y el camino de cada consulta.
 | **Parser** | Lee cada artículo, lo clasifica y lo reparte según la consulta | varias | Ninguno |
 | **Image downloader** | Descarga las imágenes de Wikimedia (Q2) | varias | Ninguno |
 | **Word sum** | Cuenta las palabras de cada abstract (Q3, Q4) y envía los largos de abstract (Q5) | varias | Ninguno |
-| **Word aggregator** | Suma los conteos de palabras de todos los word sum | varias | se almacenan en la memoria RAM los conteos de palabras y registros de EOF |
-| **Word joiner** | Une los resultados parciales y arma Q3 y Q4 | 1 | Se mantienen en un storage las sumas parciales de los aggregators hasta obtener todos los conteos parciales de los aggregator |
-| **Word counter** | Suma los largos de los abstracts viejos, para el promedio de Q5 | varias |se almacenan en la memoria RAM la suma de los largos de abstracts y registros de EOF |
-| **Q5 joiner** | Calcula el promedio y decide qué artículos nuevos cumplen Q5 | 1 | Se mantienen en RAM las sumas parciales de los largos y se almacena la informacion de los articulos a ser filtrados una vez obtenido el promedio|
+| **Q3 aggregator** | Suma los conteos de palabras de los word sum verificando el idioma del articulo y buscando coincidencias para enviar resultados Q3 al gateway | varias | se almacenan en la memoria RAM los registros de EOF y los conteos de palabras se almacenan en RAM y en un storage |
+| **Q4 aggregator** | Suma los conteos de palabras de todos los word sum, una vez recibidos los EOF de la combinacion WordsumxParser envia su top parcial al Q4 joiner| varias | se almacenan en la memoria RAM los registros de EOF y los conteos de palabras se almacenan en RAM y en un storage |
+| **Q4 joiner** | Une los resultados parciales y arma el top de palabras final de Q4 | 1 | se mantienen en RAM las combinaciones de los top parciales y los EOF recibidos|
+| **Word counter** | Suma los largos de los abstracts viejos y envia resultados de sumas parciales al Q5 joiner | varias |se almacenan en la memoria RAM la suma de los largos de abstracts y registros de EOF |
+| **Q5 joiner** | Calcula el promedio y decide qué artículos nuevos cumplen Q5 | 1 | Se mantienen en RAM las sumas parciales de los largos y se almacena en Storage la informacion de los articulos a ser filtrados una vez obtenido el promedio global|
 
-### Comunicación entre controles
+### Middleware basado en grupos
 
- La siguiente tabla resume los mecanismos utilizados para cada comunicación entre las entidades del sistema.
+### Middleware basado en grupos
 
-| Emisor | Receptor | Mecanismo de comunicación |
-|---|---|---|
-| Cliente | Gateway | TCP |
-| Gateway | Parsers | Colas de RabbitMQ, con una cola entre el Gateway y cada parser. |
-| Parsers | Word_sums | Exchange de RabbitMQ, al que cada instancia de word_sum se suscribe mediante una routing key que la representa. |
-| Parsers | Image_downloaders | Exchange de RabbitMQ, al que cada instancia de Image_downloader se suscribe mediante una routing key que la representa |
-| Word_sums | Word_aggregator | Exchange de RabbitMQ, al que cada instancia de Word_aggregator se suscribe mediante una routing key que la representa. |
-| Word_aggregator | Word_joiner | Cola compartida de RabbitMQ, a la que publican los emisores y desde la que consume el receptor. |
-| Word_sums | Word_counter | Exchange de RabbitMQ, al que cada instancia de Word_counter se suscribe mediante una routing key que la representa |
-| Word_sums | Q5Joiner | Cola compartida de RabbitMQ, a la que publican los emisores y desde la que consume el receptor. |
-| Word_counter | Q5Joiner | Cola compartida de RabbitMQ, a la que publican los emisores y desde la que consume el receptor. |
-| Worker | Gateway | Cola compartida de RabbitMQ, a la que publican los emisores y desde la que consume el receptor. |
+El sistema utiliza un middleware basado en grupos para abstraer la comunicación entre las distintas instancias de los componentes. Cada grupo se implementa mediante un exchange de tipo `direct` en RabbitMQ identificado por nombre de grupo. Se puede crear una entidad `GroupSender`que publican mensajes en el exchange y `GroupMember` que consumen mensajes del mismo. Cada miembro posee una cola identificada por el string "{group_name}.{member_id}", siendo `member_id` el ID que identifica a esa entidad.
+
+El middleware proporciona tres formas principales de comunicación: `send` que distribuye mensajes entre los miembros mediante round-robin, `broadcast` que envía un mensaje a todos los miembros, y `send_partitioned` que distribuye los datos según una clave utilizando `CRC32(key) % group_size`. Esta última permite garantizar que un mismo valor siempre sea procesada por el mismo miembro del grupo, incluso cuando los datos provienen de distintos emisores.
+
+En el sistema, `send_partitioned` se utiliza principalmente en Q3 y Q4 para distribuir las palabras entre los Aggregators. Por otro lado, `broadcast` se utiliza para propagar mensajes de control como los EOF, que deben ser recibidos por todos los miembros correspondientes y `send` se utiliza en las comunicaciones en las que se necesita distribuir la carga de processamiento (en todas las demas menos en wordsum -> Q3_aggregator y wordsum -> Q4_aggregator).
 
 ### 7.2 Distribución de los procesos en nodos
 
@@ -150,7 +144,7 @@ Cada control corre en su propio contenedor Docker. Los contenedores solo se comu
 Cómo escala el sistema:
 
 - **Cantidad de clientes:** todos usan las mismas colas y el `client_id` mantiene separados sus datos. Cada control guarda su estado por cliente y lo libera cuando ese cliente termina.
-- **Cantidad de datos:** los datos se procesan de a lotes y cada etapa reduce lo que pasa a la siguiente. Por ejemplo, el `word sum` envía conteos de palabras y no los abstracts completos, y cada `word aggregator` envía al `word joiner` solo su top 20, evitando que algún proceso necesite cargar todo en memoria.
+- **Cantidad de datos:** los datos se procesan de a lotes y cada etapa reduce lo que pasa a la siguiente. Por ejemplo, el `word sum` envía conteos de palabras y no los abstracts completos, y cada `Q4 aggregator` envía al `Q4 joiner` solo su top 20, evitando que algún proceso necesite cargar todo en memoria.
 - **Cantidad de réplicas:** A mayor cantidad de réplicas, mayor distribución del procesamiento en cada etapa, a costa de mayor cantidad de mensajes para coordinar el fin de cada estapa. 
 
 
