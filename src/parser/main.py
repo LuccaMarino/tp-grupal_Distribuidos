@@ -20,8 +20,13 @@ IMAGE_DOWNLOADER_AMOUNT = int(os.environ["IMAGE_DOWNLOADER_AMOUNT"])
 
 
 class Parser:
-
+    """
+    The Parser class is responsible for consuming messages from the input group, processing the articles, and sending the parsed articles to the appropriate output groups. It handles different message types, including EOF and DATA messages, and extracts relevant fields from the articles for further processing.
+    """
     def __init__(self):
+        """
+        Initializes the Parser instance by setting up the necessary group senders and group member for different queries.
+        """
         self.q1_group = GroupSender(MOM_HOST, OUTPUT_Q1, GATEWAY_AMOUNT)
         self.q2_group = GroupSender(MOM_HOST, OUTPUT_Q2, IMAGE_DOWNLOADER_AMOUNT)
         self.abstract_group = GroupSender(MOM_HOST, OUTPUT_ABSTRACT, SUM_AMOUNT)
@@ -30,10 +35,16 @@ class Parser:
         signal.signal(signal.SIGTERM, self._handle_sigterm)
 
     def _handle_sigterm(self, _signum, _frame):
+        """
+        Handles the SIGTERM signal by stopping the input group member from consuming messages.
+        """
         logging.info("Received SIGTERM signal")
         self.input_group_member.stop_consuming_threadsafe()
 
     def _close(self):
+        """
+        Closes the resources used by the Parser instance, including the input group member and the output group senders.
+        """
         for resource in (self.input_group_member, self.q1_group, self.q2_group, self.abstract_group):
             try:
                 resource.close()
@@ -41,6 +52,9 @@ class Parser:
                 logging.error(e)
 
     def extract_sections(self, sections_raw):
+        """
+        Extracts section names from the raw sections data in an article. It returns a set of section names in lowercase, ignoring any sections without a name or with invalid JSON format.
+        """
         section_names = set()
         if sections_raw is None or (isinstance(sections_raw, str) and not sections_raw.strip()):
             return section_names
@@ -55,6 +69,9 @@ class Parser:
         return section_names
 
     def parse_date_modified(self, value):
+        """
+        Parses the date_modified value from an article and returns a datetime object in UTC timezone.
+        """
         if value is None or value == 0 or value == "":
             return None
         if isinstance(value, datetime):
@@ -73,6 +90,9 @@ class Parser:
         return None
 
     def extract_article_fields(self, article: dict) -> dict:
+        """
+        Extracts relevant fields from an article dictionary and returns a new dictionary containing the extracted fields. The extracted fields include `date_modified`, `year`, `language`, `abstract`, `image_url`, `name`, `url`, and `biography` status.
+        """
         result = {}
         date_modified = self.parse_date_modified(article.get("date_modified"))
         if date_modified is not None:
@@ -94,10 +114,12 @@ class Parser:
             result["biography"] = True
         else:
             result["biography"] = False
-        #print(result)
         return result
 
     def consume_article(self,article, q1, q2, q3):
+        """
+        Consumes an article and extracts relevant fields for different queries. It appends the extracted data to the corresponding query lists (q1, q2, q3) based on specific conditions.
+        """
         try:
             article_fields = self.extract_article_fields(article)
             if article_fields.get("year") is not None and article_fields["year"] <= 2020 and article_fields.get("language") == "en" and article_fields.get("date_modified"):
@@ -109,8 +131,10 @@ class Parser:
         except Exception:
             logging.exception("Error processing article message")
 
-
     def consume_eof(self, client_id):
+        """
+        Consumes an EOF message from the input group and broadcasts the EOF message to the output groups (q1, q2, abstract).
+        """
         try:
             eof_query_result = message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q1, ID)
             self.q1_group.broadcast(eof_query_result)
@@ -122,6 +146,9 @@ class Parser:
             logging.exception("Error processing EOF message")
     
     def consume_message(self, message, ack, nack):
+        """
+        Consumes a message from the input group, deserializes it, and processes it based on its type (EOF or DATA). It extracts relevant fields from articles and sends the parsed data to the appropriate output groups.
+        """
         try:
             msg_type, client_id, args = message_protocol.internal.deserialize(message)
             if msg_type == message_protocol.internal.MsgType.EOF:

@@ -4,7 +4,7 @@ x-client-env: &client-env
   SERVER_PORT: "5678"
   RETRY_COUNT: "5"
   DELAY_BETWEEN_RETRIES: "1"
-  BATCH_SIZE: "50"
+  BATCH_SIZE: "100"
 
 x-client-base: &client-base
   build:
@@ -219,8 +219,8 @@ services:
       PYTHONUNBUFFERED: "1"
       STORAGE_PATH: "/data"
       BUCKET_AMOUNT: 32
-      FLUSH_WORDS: 10000
-      FLUSH_MESSAGES: 100
+      FLUSH_WORDS: 50000
+      FLUSH_MESSAGES: 1000
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -243,8 +243,8 @@ services:
       PYTHONUNBUFFERED: "1"
       STORAGE_PATH: "/data"
       BUCKET_AMOUNT: 32
-      FLUSH_WORDS: 10000
-      FLUSH_MESSAGES: 100
+      FLUSH_WORDS: 50000
+      FLUSH_MESSAGES: 1000
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -266,7 +266,7 @@ services:
       PYTHONUNBUFFERED: "1"
       STORAGE_PATH: "/data"
       BUCKET_AMOUNT: 32
-      FLUSH_WORDS: 10000
+      FLUSH_WORDS: 50000
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -288,7 +288,7 @@ services:
       PYTHONUNBUFFERED: "1"
       STORAGE_PATH: "/data"
       BUCKET_AMOUNT: 32
-      FLUSH_WORDS: 10000
+      FLUSH_WORDS: 50000
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -402,113 +402,113 @@ services:
       OUTPUT_FILE_Q5: "/output/client_0_output_q5.csv"
       INPUT_DIR: "/datasets/client_0"
 
-  # client_1:
-  #   <<: *client-base
-  #   container_name: client_1
-  #   environment:
-  #     <<: *client-env
-  #     OUTPUT_FILE_Q1: "/output/client_1_output_q1.csv"
-  #     OUTPUT_FILE_Q2: "/output/client_1_output_q2.csv"
-  #     OUTPUT_FILE_Q3: "/output/client_1_output_q3.csv"
-  #     OUTPUT_FILE_Q4: "/output/client_1_output_q4.csv"
-  #     OUTPUT_FILE_Q5: "/output/client_1_output_q5.csv"
-  #     INPUT_DIR: "/datasets/client_1"
+  client_1:
+    <<: *client-base
+    container_name: client_1
+    environment:
+      <<: *client-env
+      OUTPUT_FILE_Q1: "/output/client_1_output_q1.csv"
+      OUTPUT_FILE_Q2: "/output/client_1_output_q2.csv"
+      OUTPUT_FILE_Q3: "/output/client_1_output_q3.csv"
+      OUTPUT_FILE_Q4: "/output/client_1_output_q4.csv"
+      OUTPUT_FILE_Q5: "/output/client_1_output_q5.csv"
+      INPUT_DIR: "/datasets/client_1"
 
-  # client_2:
-  #   <<: *client-base
-  #   container_name: client_2
-  #   environment:
-  #     <<: *client-env
-  #     OUTPUT_FILE_Q1: "/output/client_2_output_q1.csv"
-  #     OUTPUT_FILE_Q2: "/output/client_2_output_q2.csv"
-  #     OUTPUT_FILE_Q3: "/output/client_2_output_q3.csv"
-  #     OUTPUT_FILE_Q4: "/output/client_2_output_q4.csv"
-  #     OUTPUT_FILE_Q5: "/output/client_2_output_q5.csv"
-  #     INPUT_DIR: "/datasets/client_2"
+  client_2:
+    <<: *client-base
+    container_name: client_2
+    environment:
+      <<: *client-env
+      OUTPUT_FILE_Q1: "/output/client_2_output_q1.csv"
+      OUTPUT_FILE_Q2: "/output/client_2_output_q2.csv"
+      OUTPUT_FILE_Q3: "/output/client_2_output_q3.csv"
+      OUTPUT_FILE_Q4: "/output/client_2_output_q4.csv"
+      OUTPUT_FILE_Q5: "/output/client_2_output_q5.csv"
+      INPUT_DIR: "/datasets/client_2"
 
-  # client_3:
-  #   <<: *client-base
-  #   container_name: client_3
-  #   environment:
-  #     <<: *client-env
-  #     OUTPUT_FILE_Q1: "/output/client_3_output_q1.csv"
-  #     OUTPUT_FILE_Q2: "/output/client_3_output_q2.csv"
-  #     OUTPUT_FILE_Q3: "/output/client_3_output_q3.csv"
-  #     OUTPUT_FILE_Q4: "/output/client_3_output_q4.csv"
-  #     OUTPUT_FILE_Q5: "/output/client_3_output_q5.csv"
-  #     INPUT_DIR: "/datasets/client_3"
+  client_3:
+    <<: *client-base
+    container_name: client_3
+    environment:
+      <<: *client-env
+      OUTPUT_FILE_Q1: "/output/client_3_output_q1.csv"
+      OUTPUT_FILE_Q2: "/output/client_3_output_q2.csv"
+      OUTPUT_FILE_Q3: "/output/client_3_output_q3.csv"
+      OUTPUT_FILE_Q4: "/output/client_3_output_q4.csv"
+      OUTPUT_FILE_Q5: "/output/client_3_output_q5.csv"
+      INPUT_DIR: "/datasets/client_3"
 
-  # client_4:
-  #   <<: *client-base
-  #   container_name: client_4
-  #   environment:
-  #     <<: *client-env
-  #     OUTPUT_FILE_Q1: "/output/client_4_output_q1.csv"
-  #     OUTPUT_FILE_Q2: "/output/client_4_output_q2.csv"
-  #     OUTPUT_FILE_Q3: "/output/client_4_output_q3.csv"
-  #     OUTPUT_FILE_Q4: "/output/client_4_output_q4.csv"
-  #     OUTPUT_FILE_Q5: "/output/client_4_output_q5.csv"
-  #     INPUT_DIR: "/datasets/client_4"
+  client_4:
+    <<: *client-base
+    container_name: client_4
+    environment:
+      <<: *client-env
+      OUTPUT_FILE_Q1: "/output/client_4_output_q1.csv"
+      OUTPUT_FILE_Q2: "/output/client_4_output_q2.csv"
+      OUTPUT_FILE_Q3: "/output/client_4_output_q3.csv"
+      OUTPUT_FILE_Q4: "/output/client_4_output_q4.csv"
+      OUTPUT_FILE_Q5: "/output/client_4_output_q5.csv"
+      INPUT_DIR: "/datasets/client_4"
 
-  # client_5:
-  #   <<: *client-base
-  #   container_name: client_5
-  #   environment:
-  #     <<: *client-env
-  #     OUTPUT_FILE_Q1: "/output/client_5_output_q1.csv"
-  #     OUTPUT_FILE_Q2: "/output/client_5_output_q2.csv"
-  #     OUTPUT_FILE_Q3: "/output/client_5_output_q3.csv"
-  #     OUTPUT_FILE_Q4: "/output/client_5_output_q4.csv"
-  #     OUTPUT_FILE_Q5: "/output/client_5_output_q5.csv"
-  #     INPUT_DIR: "/datasets/client_5"
+  client_5:
+    <<: *client-base
+    container_name: client_5
+    environment:
+      <<: *client-env
+      OUTPUT_FILE_Q1: "/output/client_5_output_q1.csv"
+      OUTPUT_FILE_Q2: "/output/client_5_output_q2.csv"
+      OUTPUT_FILE_Q3: "/output/client_5_output_q3.csv"
+      OUTPUT_FILE_Q4: "/output/client_5_output_q4.csv"
+      OUTPUT_FILE_Q5: "/output/client_5_output_q5.csv"
+      INPUT_DIR: "/datasets/client_5"
 
-  # client_6:
-  #   <<: *client-base
-  #   container_name: client_6
-  #   environment:
-  #     <<: *client-env
-  #     OUTPUT_FILE_Q1: "/output/client_6_output_q1.csv"
-  #     OUTPUT_FILE_Q2: "/output/client_6_output_q2.csv"
-  #     OUTPUT_FILE_Q3: "/output/client_6_output_q3.csv"
-  #     OUTPUT_FILE_Q4: "/output/client_6_output_q4.csv"
-  #     OUTPUT_FILE_Q5: "/output/client_6_output_q5.csv"
-  #     INPUT_DIR: "/datasets/client_6"
+  client_6:
+    <<: *client-base
+    container_name: client_6
+    environment:
+      <<: *client-env
+      OUTPUT_FILE_Q1: "/output/client_6_output_q1.csv"
+      OUTPUT_FILE_Q2: "/output/client_6_output_q2.csv"
+      OUTPUT_FILE_Q3: "/output/client_6_output_q3.csv"
+      OUTPUT_FILE_Q4: "/output/client_6_output_q4.csv"
+      OUTPUT_FILE_Q5: "/output/client_6_output_q5.csv"
+      INPUT_DIR: "/datasets/client_6"
 
-  # client_7:
-  #   <<: *client-base
-  #   container_name: client_7
-  #   environment:
-  #     <<: *client-env
-  #     OUTPUT_FILE_Q1: "/output/client_7_output_q1.csv"
-  #     OUTPUT_FILE_Q2: "/output/client_7_output_q2.csv"
-  #     OUTPUT_FILE_Q3: "/output/client_7_output_q3.csv"
-  #     OUTPUT_FILE_Q4: "/output/client_7_output_q4.csv"
-  #     OUTPUT_FILE_Q5: "/output/client_7_output_q5.csv"
-  #     INPUT_DIR: "/datasets/client_7"
+  client_7:
+    <<: *client-base
+    container_name: client_7
+    environment:
+      <<: *client-env
+      OUTPUT_FILE_Q1: "/output/client_7_output_q1.csv"
+      OUTPUT_FILE_Q2: "/output/client_7_output_q2.csv"
+      OUTPUT_FILE_Q3: "/output/client_7_output_q3.csv"
+      OUTPUT_FILE_Q4: "/output/client_7_output_q4.csv"
+      OUTPUT_FILE_Q5: "/output/client_7_output_q5.csv"
+      INPUT_DIR: "/datasets/client_7"
 
-  # client_8:
-  #   <<: *client-base
-  #   container_name: client_8
-  #   environment:
-  #     <<: *client-env
-  #     OUTPUT_FILE_Q1: "/output/client_8_output_q1.csv"
-  #     OUTPUT_FILE_Q2: "/output/client_8_output_q2.csv"
-  #     OUTPUT_FILE_Q3: "/output/client_8_output_q3.csv"
-  #     OUTPUT_FILE_Q4: "/output/client_8_output_q4.csv"
-  #     OUTPUT_FILE_Q5: "/output/client_8_output_q5.csv"
-  #     INPUT_DIR: "/datasets/client_8"
+  client_8:
+    <<: *client-base
+    container_name: client_8
+    environment:
+      <<: *client-env
+      OUTPUT_FILE_Q1: "/output/client_8_output_q1.csv"
+      OUTPUT_FILE_Q2: "/output/client_8_output_q2.csv"
+      OUTPUT_FILE_Q3: "/output/client_8_output_q3.csv"
+      OUTPUT_FILE_Q4: "/output/client_8_output_q4.csv"
+      OUTPUT_FILE_Q5: "/output/client_8_output_q5.csv"
+      INPUT_DIR: "/datasets/client_8"
 
-  # client_9:
-  #   <<: *client-base
-  #   container_name: client_9
-  #   environment:
-  #     <<: *client-env
-  #     OUTPUT_FILE_Q1: "/output/client_9_output_q1.csv"
-  #     OUTPUT_FILE_Q2: "/output/client_9_output_q2.csv"
-  #     OUTPUT_FILE_Q3: "/output/client_9_output_q3.csv"
-  #     OUTPUT_FILE_Q4: "/output/client_9_output_q4.csv"
-  #     OUTPUT_FILE_Q5: "/output/client_9_output_q5.csv"
-  #     INPUT_DIR: "/datasets/client_9"
+  client_9:
+    <<: *client-base
+    container_name: client_9
+    environment:
+      <<: *client-env
+      OUTPUT_FILE_Q1: "/output/client_9_output_q1.csv"
+      OUTPUT_FILE_Q2: "/output/client_9_output_q2.csv"
+      OUTPUT_FILE_Q3: "/output/client_9_output_q3.csv"
+      OUTPUT_FILE_Q4: "/output/client_9_output_q4.csv"
+      OUTPUT_FILE_Q5: "/output/client_9_output_q5.csv"
+      INPUT_DIR: "/datasets/client_9"
 
 volumes:
   q5_joiner_new_articles:

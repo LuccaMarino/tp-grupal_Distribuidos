@@ -23,15 +23,20 @@ Q5_JOINER_GROUP = os.environ["Q5_JOINER_GROUP"]
 Q5_JOINER_AMOUNT = 1
 LAST_OLD_YEAR = 2020
 
-# Posición de cada idioma en los flags que se envían a los q3_aggregators ([en, fr])
+# Each language is represented by a binary flag (0 or 1) indicating whether the word appears in any abstract of that language. The index of each language in the list corresponds to its position in the LANGUAGE_INDEX dictionary.
 LANGUAGE_INDEX = {"en": 0, "fr": 1}
 
 WORD_REGEX = re.compile(r"\b\w+\b")
 NUMBER_REGEX = re.compile(r"[+-]?((\d+\.?\d*)|(\.\d+))")
 
-
 class WordSum:
+    """
+    The WordSum class is responsible for consuming messages from the input group, processing the data to extract words and their counts, and sending the results to the appropriate output groups.
+    """
     def __init__(self):
+        """
+        Initializes the WordSum instance by setting up the necessary group senders and group member for processing word sum requests.
+        """
         self._input = GroupMember(MOM_HOST, INPUT_GROUP, ID)
         self._q3_aggregators = GroupSender(MOM_HOST, Q3_AGGREGATOR_GROUP, Q3_AGGREGATOR_AMOUNT)
         self._q4_aggregators = GroupSender(MOM_HOST, Q4_AGGREGATOR_GROUP, Q4_AGGREGATOR_AMOUNT)
@@ -40,29 +45,38 @@ class WordSum:
         signal.signal(signal.SIGTERM, self._handle_sigterm)
 
     def _handle_sigterm(self, signum, frame):
+        """
+        Handles the SIGTERM signal by stopping the input group member from consuming messages.
+        """
         logging.info("Received SIGTERM signal")
         self._input.stop_consuming_threadsafe()
 
     def _close(self):
+        """
+        Closes the resources used by the WordSum instance, including the input group member and the output group senders.
+        """
         for connection in (self._input, self._q3_aggregators, self._q4_aggregators, self._word_counters, self._q5_joiner):
             try:
                 connection.close()
             except MessageMiddlewareCloseError as e:
                 logging.error(e)
 
-    # Palabras del abstract sin stopwords ni números, con repeticiones
     def _extract_words(self, abstract):
+        """
+        Extracts words from the given abstract, filtering out stopwords and numbers. It returns a list of words in lowercase, preserving repetitions.
+        """
         words = []
         for word in WORD_REGEX.findall(abstract.lower()):
             if word not in stopwords.ALL and not NUMBER_REGEX.fullmatch(word):
                 words.append(word)
         return words
 
-    # Para Q4 cuenta en cuántos abstracts aparece cada palabra, y para Q3 marca
-    # si aparece en algún abstract en inglés y/o en alguno en francés
     def _add_counts(self, totals_by_word, languages_by_word, lang, words):
+        """
+        Updates the totals_by_word and languages_by_word dictionaries with the counts of words and their language appearances. It increments the count of each unique word in totals_by_word and updates the language flags in languages_by_word based on the provided language (lang) and the list of words. This is used for Q3 and Q4.
+        """
         language_index = LANGUAGE_INDEX.get(lang)
-        for word in set(words):     # solo importa si la palabra aparece, no cuantas veces
+        for word in set(words): # Only count unique words for Q3 and Q4
             if word not in totals_by_word:
                 totals_by_word[word] = 0
             totals_by_word[word] += 1
@@ -71,31 +85,35 @@ class WordSum:
                     languages_by_word[word] = [0, 0]
                 languages_by_word[word][language_index] = 1
 
-    
     def _process_data(self, client_id, records):
+        """
+        Processes the data by extracting words from the abstracts, counting them, and sending the results to the appropriate aggregators. For Q3 and Q4, we only need to count unique words, so we use a set to avoid counting duplicates. For Q5, we need to count the total number of words in each abstract, so we preserve repetitions and store the length of the list of words. We also separate old articles (year <= LAST_OLD_YEAR) from new articles (year > LAST_OLD_YEAR) to send them to different consumers.
+        """
         totals_by_word = {}
         languages_by_word = {}
         old_lengths = []
         new_articles = []
         for lang, year, url, abstract in records:
             words = self._extract_words(abstract)
-            # para Q3 y Q4
             self._add_counts(totals_by_word, languages_by_word, lang, words)
-            # Para Q5, necesita el largo incluyendo repeticiones de palabras
             if year <= LAST_OLD_YEAR:
                 old_lengths.append(len(words))
             else:
                 new_articles.append([url, len(words)])
 
-        # cada registro es [palabra, en, fr]
         def build_languages_message(member_languages):
+            """
+            Builds a message containing the languages in which each word appears. Each record is a list containing the word and two binary flags indicating whether the word appears in any abstract of English and French, respectively.
+            """
             languages_records = []
             for word, languages in member_languages.items():
                 languages_records.append([word, languages[0], languages[1]])
             return message_protocol.internal.serialize_data(client_id, languages_records)
 
-        # cada registro es [palabra, total]
         def build_totals_message(member_totals):
+            """
+            Builds a message containing the total counts of each word. Each record is a list containing the word and its total count.
+            """
             totals_records = []
             for word, total in member_totals.items():
                 totals_records.append([word, total])
@@ -108,10 +126,10 @@ class WordSum:
         if new_articles:
             self._q5_joiner.send(message_protocol.internal.serialize_data(client_id, new_articles))
         
-    # Reenvía el EOF de cada parser a todos los destinos. 
-    # Se envia un sender_id que identifica al par parser-word_sum, ya que 
-    # cada receptor espera un EOF por cada par
     def _process_eof(self, client_id, parser_id):
+        """
+        Processes the EOF message received from a parser and broadcasts it to all aggregators and counters. The EOF message is serialized with the client_id and a unique identifier for the parser-word_sum pair, allowing each receiver to expect an EOF for each pair.
+        """
         logging.info(f"Received EOF from parser {parser_id} for client {client_id}")
         eof_message = message_protocol.internal.serialize_eof(client_id, f"{parser_id}.{ID}")
         self._q3_aggregators.broadcast(eof_message)
@@ -120,6 +138,9 @@ class WordSum:
         self._q5_joiner.broadcast(eof_message)
 
     def _process_message(self, message, ack, nack):
+        """
+        Processes a message received from the input group. It deserializes the message, determines its type (DATA or EOF), and calls the appropriate processing method.
+        """
         try:
             msg_type, client_id, args = message_protocol.internal.deserialize(message)
             if msg_type == message_protocol.internal.MsgType.DATA:
