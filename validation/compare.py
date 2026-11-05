@@ -119,7 +119,8 @@ def compare_client(client_name, output_dir, expected_dir):
         is_equal = compare_query(query, actual_rows, expected_rows) and is_equal
         
         status_str = f"{GREEN}OK{RESET}" if is_equal else f"{RED}FAIL{RESET}"
-        print(f"  {query}: {status_str} ({len(actual_rows)} rows, {len(expected_rows)} expected)")
+        content_status = f"{GREEN}content matching{RESET}" if is_equal else f"{RED}content mismatch{RESET}"
+        print(f"  {query}: {status_str} ({len(actual_rows)} rows, {len(expected_rows)} expected | {content_status})")
         all_equal = all_equal and is_equal
     return all_equal
 
