@@ -1,0 +1,27 @@
+version: '3.8'
+
+x-client-env: &client-env
+  PYTHONUNBUFFERED: "1"
+  SERVER_HOST: "gateway"
+  SERVER_PORT: "5678"
+  RETRY_COUNT: "5"
+  DELAY_BETWEEN_RETRIES: "1"
+  BATCH_SIZE: "100"
+
+services:
+  client_10:
+    build:
+      context: ./src/
+      dockerfile: client/Dockerfile
+    container_name: client_10
+    volumes:
+      - ./datasets:/datasets
+      - ./output:/output
+    environment:
+      <<: *client-env
+      OUTPUT_FILE_Q1: "/output/client_10_output_q1.csv"
+      OUTPUT_FILE_Q2: "/output/client_10_output_q2.csv"
+      OUTPUT_FILE_Q3: "/output/client_10_output_q3.csv"
+      OUTPUT_FILE_Q4: "/output/client_10_output_q4.csv"
+      OUTPUT_FILE_Q5: "/output/client_10_output_q5.csv"
+      INPUT_DIR: "/datasets/client_0"
