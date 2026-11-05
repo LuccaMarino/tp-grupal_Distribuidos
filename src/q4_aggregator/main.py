@@ -15,47 +15,62 @@ PARSER_AMOUNT = int(os.environ["PARSER_AMOUNT"])
 WORD_SUM_AMOUNT = int(os.environ["WORD_SUM_AMOUNT"])
 STORAGE_PATH = os.environ["STORAGE_PATH"]
 BUCKET_AMOUNT = int(os.environ["BUCKET_AMOUNT"])
-# Cantidad de palabras distintas en memoria a partir de la cual se vuelca el buffer a disco
+
+# Quantity of words to accumulate in memory before flushing to disk. This is a tradeoff between memory usage and disk I/O.
 FLUSH_WORDS = int(os.environ["FLUSH_WORDS"])
 
 JOINER_AMOUNT = 1
 TOP_SIZE = 20
 
-# Cada word_sum reenvía el EOF de cada parser, así que llega uno por 
-# cada par parser-word_sum
 EXPECTED_EOFS = PARSER_AMOUNT * WORD_SUM_AMOUNT
 
-
-# Orden del top: mayor total primero y, si empatan, alfabético
 def _top_order(word_total):
+    """
+    Returns a tuple that can be used to sort words by total count in descending order, and by word in ascending order for ties.
+    """
     word, total = word_total
     return (-total, word)
 
-# Combina el total guardado en disco con el del buffer. Los valores son [total]
 def _add_totals(stored_values, new_values):
+    """
+    Combines the total stored on disk with the total in the buffer. The values are [total].
+    """
     return [stored_values[0] + new_values[0]]
 
 class Q4Aggregator:
+    """
+    Aggregator for the Q4 query. It receives messages from the word sum nodes, accumulates the totals in memory, and flushes them to disk when the buffer reaches a certain size. When it receives all EOFs for a client, it computes the partial top 20 words and sends them to the joiner.
+    """
     def __init__(self):
+        """
+        Initializes the Q4Aggregator by setting up the input group member, buffers, storages, and EOF tracking for each client. It also sets up a signal handler for SIGTERM to allow graceful shutdown.
+        """
         self._input = GroupMember(MOM_HOST, INPUT_GROUP, ID)
-        self._buffers_by_client = {}   # client_id -> {palabra: [total]} con lo que todavía no se volcó a disco
-        self._storages_by_client = {}  # client_id -> BucketStorage con los totales ya volcados
-        self._eofs_by_client = {}      # client_id -> set con los sender_id de los EOF recibidos
+        self._buffers_by_client = {}   # client_id -> {word: [total]} with the totals accumulated in memory
+        self._storages_by_client = {}  # client_id -> BucketStorage with the totals stored on disk
+        self._eofs_by_client = {}      # client_id -> set with the sender_id of the received EOFs
         signal.signal(signal.SIGTERM, self._handle_sigterm)
 
     def _handle_sigterm(self, signum, frame):
+        """
+        Handles the SIGTERM signal by stopping the input consumer thread. This allows the aggregator to finish processing any remaining messages before shutting down.
+        """
         logging.info("Received SIGTERM signal")
         self._input.stop_consuming_threadsafe()
 
     def _close(self):
+        """
+        Closes the input group member, handling any exceptions that may occur during the close operation. This is called when the aggregator is shutting down to ensure that resources are released properly.
+        """
         try:
             self._input.close()
         except MessageMiddlewareCloseError as e:
             logging.error(e)
 
-    # Suma los totales en el buffer. Cada registro es [palabra, total].
-    # Si el buffer llega a FLUSH_WORDS palabras, se vuelca a disco
     def _process_data(self, client_id, records):
+        """
+        Processes incoming data messages by accumulating word totals in the buffer for the specified client. If the buffer reaches the defined threshold (FLUSH_WORDS), it flushes the buffer to disk using the associated BucketStorage instance.
+        """
         if client_id not in self._buffers_by_client:
             self._buffers_by_client[client_id] = {}
             self._storages_by_client[client_id] = BucketStorage(STORAGE_PATH, client_id, BUCKET_AMOUNT)
@@ -67,17 +82,20 @@ class Q4Aggregator:
         if len(buffer) >= FLUSH_WORDS:
             self._flush_buffer(client_id)
 
-    # Suma el buffer a los totales guardados en disco y lo vacía
     def _flush_buffer(self, client_id):
+        """
+        Flushes the buffer for the specified client by merging the accumulated word totals in memory with the totals stored on disk. After merging, it clears the buffer to free up memory.
+        """
         buffer = self._buffers_by_client[client_id]
         if len(buffer) == 0:
             return
         self._storages_by_client[client_id].merge(buffer, _add_totals)
         self._buffers_by_client[client_id] = {}
 
-    # Se guardan los sender_id por cada EOF en un set, así no se cuentan EOFs repetidos.
-    # Si llegaron todos los EOFs esperados para este cliente, se flushea el cliente
     def _process_eof(self, client_id, sender_id):
+        """
+        Processes incoming EOF messages by tracking the sender IDs for each client. If all expected EOFs have been received for a client, it triggers the flush operation to compute and send the top 20 words to the joiner.
+        """
         if client_id not in self._eofs_by_client:
             self._eofs_by_client[client_id] = set()
         eofs = self._eofs_by_client[client_id]
@@ -85,9 +103,10 @@ class Q4Aggregator:
         if len(eofs) == EXPECTED_EOFS:
             self._flush_client(client_id)
 
-    # Arma el top 20 local recorriendo los buckets de a uno. A los candidatos de cada
-    # bucket se les suma el top acumulado y se queda con los 20 mejores
     def _top_words(self, storage):
+        """
+        Computes the local top 20 words by iterating through each bucket in the BucketStorage. For each bucket, it combines the current top candidates with the words in the bucket, sorts them according to the defined order, and retains only the top 20 words.
+        """
         top = []
         for bucket_index in range(storage.bucket_amount()):
             candidates = top
@@ -97,12 +116,10 @@ class Q4Aggregator:
             top = sorted_candidates[:TOP_SIZE]
         return top
 
-    # Vuelca lo que queda en el buffer, arma el top 20 local a partir de los buckets y
-    # lo envía al joiner junto con el EOF. Recién después de enviarlo borra los archivos
-    # del cliente. La conexión de salida se abre recién acá y se cierra al terminar el
-    # flush, ya que este nodo solo puede enviar cuando tiene todos los datos. Si se abre
-    # desde el inicio quedaría ociosa y el broker podría cerrarla por heartbeat
     def _flush_client(self, client_id):
+        """
+        Flushes the remaining buffer for the specified client, computes the top 20 words from the stored data, and sends the results along with an EOF message to the joiner. After sending, it cleans up by deleting the storage files for that client.
+        """
         self._eofs_by_client.pop(client_id)
         top = []
         storage = None
@@ -125,6 +142,9 @@ class Q4Aggregator:
         logging.info(f"Client {client_id} finished: sent top {len(top)}")
 
     def _process_message(self, message, ack, nack):
+        """
+        Processes incoming messages by deserializing them and determining their type. Depending on the message type (DATA or EOF), it calls the appropriate processing method.
+        """
         try:
             msg_type, client_id, args = message_protocol.internal.deserialize(message)
             if msg_type == message_protocol.internal.MsgType.DATA:
@@ -143,14 +163,12 @@ class Q4Aggregator:
         finally:
             self._close()
 
-
 def main():
     logging.basicConfig(level=logging.INFO)
     logging.info("Starting q4 aggregator service...")
     q4_aggregator = Q4Aggregator()
     q4_aggregator.start()
     return 0
-
 
 if __name__ == "__main__":
     main()
