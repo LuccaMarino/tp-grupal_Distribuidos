@@ -76,13 +76,13 @@ Aquí mostramos cómo se comporta el sistema mientras corre: qué pasa y en qué
 
 ![Diagrama de actividades](diagramas/actividades.png)
 
-Como los datos de un cliente se reparten entre varias réplicas, hay que saber cuándo se terminaron todos. Lo mostramos con el `Q4 joiner`, que es stateful: recibe los conteos de los `Q4 aggregator` y envía al `Gateway`. El `Q4 aggregator`, es una , y libera el estado de ese cliente. El resto de los controles stateful siguen el mismo esquema, cambiando el mecanismo de envío según la tabla de la sección 7.1.
+Como los datos de un cliente se reparten entre varias réplicas, hay que saber cuándo se terminaron todos. Lo mostramos con el `Q4 joiner`, que es stateful: recibe los top 20 parciales de los `Q4 aggregator` y envía al `Gateway`. Cada `Q4 aggregator`, cuando terminó de procesar los datos de un cliente, le envía su top 20 local y un EOF por la misma cola, por lo que el EOF siempre llega detrás de sus datos, y libera el estado de ese cliente (incluido su storage en disco). El `Q4 joiner` registra los EOF recibidos para ese cliente y, cuando llegaron todos, arma el top 20 global y lo envía junto con un EOF al `Gateway`, y libera el estado de ese cliente. El resto de los controles stateful siguen el mismo esquema, cambiando el mecanismo de envío según la tabla de la sección 7.1.
 
 ### 5.2 Interacción entre el cliente y el sistema
 
 ![Secuencia general](diagramas/secuencia_gral.png)
 
-El diagrama cómo se comunica un cliente con el sistema y en qué momento recibe cada resultado. Al conectarse, el `Gateway` le asigna un `client_id`, que acompaña a todos sus mensajes dentro del sistema. El cliente envía los artículos en lotes y el `Gateway` los reenvía al sistema. Mientras el cliente sigue enviando, ya pueden volver resultados de Q1, Q2 y Q3, porque se resuelven artículo por artículo y en el caso de Q3 no se necesita el procesamiento de la totalidad de los datos para el envío de resultados. Cuando el cliente termina, envía un EOF, que el `Gateway` propaga al sistema. Después de eso se completan los resultados de Q1, Q2 y Q3, y llegan los de Q4 y Q5, que necesitan todos los datos para calcular. Cuando llegaron las 5 consultas, el `Gateway` le avisa al cliente que terminó.
+El diagrama muestra cómo se comunica un cliente con el sistema y en qué momento recibe cada resultado. Al conectarse, el `Gateway` le asigna un `client_id`, que acompaña a todos sus mensajes dentro del sistema. El cliente envía los artículos en lotes y el `Gateway` los reenvía al sistema. Mientras el cliente sigue enviando, ya pueden volver resultados de Q1, Q2 y Q3, porque se resuelven artículo por artículo y en el caso de Q3 no se necesita el procesamiento de la totalidad de los datos para el envío de resultados. Cuando el cliente termina, envía un EOF, que el `Gateway` propaga al sistema. Después de eso se completan los resultados de Q1, Q2 y Q3, y llegan los de Q4 y Q5, que necesitan todos los datos para calcular. Cuando llegaron las 5 consultas, el `Gateway` le avisa al cliente que terminó.
 
 ## 6. Vista de desarrollo
 
@@ -115,13 +115,12 @@ Muestra los controles, las colas entre ellos y el camino de cada consulta.
 | **Parser** | Lee cada artículo, lo clasifica y lo reparte según la consulta | varias | Ninguno |
 | **Image downloader** | Descarga las imágenes de Wikimedia (Q2) | varias | Ninguno |
 | **Word sum** | Cuenta las palabras de cada abstract (Q3, Q4) y envía los largos de abstract (Q5) | varias | Ninguno |
-| **Q3 aggregator** | Suma los conteos de palabras de los word sum verificando el idioma del articulo y buscando coincidencias para enviar resultados Q3 al gateway | varias | se almacenan en la memoria RAM los registros de EOF y los conteos de palabras se almacenan en RAM y en un storage |
+| **Q3 aggregator** | Guarda en qué idiomas apareció cada palabra de los word sum verificando el idioma del articulo y buscando coincidencias para enviar resultados Q3 al gateway | varias | se almacenan en la memoria RAM los registros de EOF y los conteos de palabras se almacenan en RAM y en un storage |
 | **Q4 aggregator** | Suma los conteos de palabras de todos los word sum, una vez recibidos los EOF de la combinacion WordsumxParser envia su top parcial al Q4 joiner| varias | se almacenan en la memoria RAM los registros de EOF y los conteos de palabras se almacenan en RAM y en un storage |
 | **Q4 joiner** | Une los resultados parciales y arma el top de palabras final de Q4 | 1 | se mantienen en RAM las combinaciones de los top parciales y los EOF recibidos|
 | **Word counter** | Suma los largos de los abstracts viejos y envia resultados de sumas parciales al Q5 joiner | varias |se almacenan en la memoria RAM la suma de los largos de abstracts y registros de EOF |
 | **Q5 joiner** | Calcula el promedio y decide qué artículos nuevos cumplen Q5 | 1 | Se mantienen en RAM las sumas parciales de los largos y se almacena en Storage la informacion de los articulos a ser filtrados una vez obtenido el promedio global|
 
-### Middleware basado en grupos
 
 ### Middleware basado en grupos
 
@@ -152,6 +151,6 @@ Cómo escala el sistema:
 
 | Integrante | Paquetes |
 |---|---|
-| Pedro | `docker-compose`, `message_protocol`, `gateway`, `client` |
-| Santiago | `Parser`, `Image downloader`, `Word counter`, `Q5 joiner` |
-| Lucca | `Word sum`, `Word aggregator`, `Word joiner`, automatizar comparación con la ejecución serial, `middleware` |
+| Pedro | `message_protocol`, `gateway`, `client`, `Word counter`, `Q5 joiner` |
+| Santiago | `Parser`, `Image downloader`, `client`, `gateway` |
+| Lucca | `Word sum`, `Q3 aggregator`, `Q4 aggregator`, `Q4 joiner`, `middleware` |

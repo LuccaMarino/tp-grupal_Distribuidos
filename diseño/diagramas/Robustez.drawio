@@ -377,13 +377,13 @@
         <mxCell id="YWz1AP6xaUG25M_ko6ob-90" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fontSize=26;" value="vocabulario acumulado" vertex="1">
           <mxGeometry height="98" width="170" x="3754.76" y="2577" as="geometry" />
         </mxCell>
-        <mxCell id="YWz1AP6xaUG25M_ko6ob-91" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fontSize=26;" value="Q3 storage" vertex="1">
+        <mxCell id="YWz1AP6xaUG25M_ko6ob-91" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fontSize=26;" value="q3_aggregator_data" vertex="1">
           <mxGeometry height="98" width="170" x="3732.88" y="2598" as="geometry" />
         </mxCell>
         <mxCell id="YWz1AP6xaUG25M_ko6ob-92" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fontSize=26;" value="vocabulario acumulado" vertex="1">
           <mxGeometry height="98" width="170" x="3743.82" y="2741" as="geometry" />
         </mxCell>
-        <mxCell id="YWz1AP6xaUG25M_ko6ob-93" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fontSize=26;" value="Q4 partial storage" vertex="1">
+        <mxCell id="YWz1AP6xaUG25M_ko6ob-93" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fontSize=26;" value="q4_aggregator_data" vertex="1">
           <mxGeometry height="98" width="170" x="3721.94" y="2762" as="geometry" />
         </mxCell>
         <mxCell id="YWz1AP6xaUG25M_ko6ob-94" edge="1" parent="1" source="YWz1AP6xaUG25M_ko6ob-50" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;fontSize=12;defaultLabelBackgroundColor=page;startSize=8;endSize=8;" target="YWz1AP6xaUG25M_ko6ob-93">
