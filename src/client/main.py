@@ -27,8 +27,14 @@ QUERY_OUTPUTS = {
     message_protocol.internal.Query.Q5: {"path": OUTPUT_FILE_Q5,"fields": ["url", "word_count"]}
     }
 
+PRINT_INTERVAL = 10000  # Print progress every 10000 articles sent
+
 class Client:
+
     def __init__(self):
+        """
+        Initializes the client. Sets up signal handling for SIGTERM, initializes output files and CSV writers for each query, and prepares to receive messages from the server.
+        """
         self.closed = threading.Event()
         self.server_socket = None
         self._prev_sigterm_handler = signal.signal(signal.SIGTERM, self._handle_sigterm)
@@ -43,6 +49,9 @@ class Client:
         self.finished_queries = set()
 
     def _handle_sigterm(self, signum, frame):
+        """
+        Handles the SIGTERM signal.
+        """
         logging.info("SIGTERM received. Closing client...")
         self.closed.set()
         self.disconnect()
@@ -50,6 +59,9 @@ class Client:
             self._prev_sigterm_handler(signum, frame)
 
     def connect(self, server_host, server_port):
+        """
+        Connects to the server at the specified host and port, retrying if the connection is refused.
+        """
         for attempt in range(RETRY_COUNT):
             try:
                 self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -62,6 +74,9 @@ class Client:
         raise ConnectionError(f"Failed to connect to {server_host}:{server_port} after {RETRY_COUNT} attempts.")
 
     def disconnect(self):
+        """
+        Disconnects from the server and closes the socket.
+        """
         try:
             if self.server_socket:
                 self.server_socket.shutdown(socket.SHUT_RDWR)
@@ -72,12 +87,21 @@ class Client:
             self.server_socket = None
 
     def write_query_result(self, query, result):
+        """
+        Writes the result of a query to the corresponding CSV file.
+        """
         writer = self.csv_writers.get(query)
         if writer is None:
             raise ValueError(f"Unknown query: {query}")
         writer.writerows(result)
 
     def receive_messages(self):
+        """
+        Receives messages from the server and processes them based on their type. Handles ACKs, query results, and end-of-query notifications.
+        - ACK: Increments the acknowledgment count.
+        - QUERY_RESULT: Writes the query result to the corresponding CSV file.
+        - END_OF_QUERY_RESULTS: Marks the query as finished.
+        """
         ack_count = 0
         try:
             while not self.closed.is_set():
@@ -99,6 +123,9 @@ class Client:
         finally:
             self.closed.set()
 
+    """
+    Sends Wikipedia articles from Parquet files in the specified input directory to the server in batches. After sending all articles, it sends an END_OF_RECORDS message to indicate completion.
+    """
     def send_wikipedia_articles(self, input_dir):
         parquet_files = [
             os.path.join(input_dir, f)
@@ -120,7 +147,7 @@ class Client:
                     article_list
                 )
                 sent_count += len(article_list)
-                if sent_count % 10000 == 0:
+                if sent_count % PRINT_INTERVAL == 0:
                     print(f"{filename}: {sent_count} / {total_articles} articles sent to gateway.")
         message_protocol.external.send_msg(
             self.server_socket,
@@ -129,6 +156,9 @@ class Client:
         logging.info("All articles sent. Waiting for final acknowledgment...")
 
     def close_output_files(self):
+        """
+        Closes all output files that were opened for writing query results.
+        """
         for output_file in self.output_files.values():
             output_file.close()
 
