@@ -1,0 +1,103 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="Page-1" id="flf4y2WOqAoDuZGxeXyK">
+    <mxGraphModel dx="1467" dy="708" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="7FZvt8T7d5ALhj_1bPXx-1" edge="1" parent="1" source="7FZvt8T7d5ALhj_1bPXx-3" style="edgeStyle=orthogonalEdgeStyle;curved=1;rounded=0;curveGeometry=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;startSize=8;endSize=8;" target="7FZvt8T7d5ALhj_1bPXx-10">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="7FZvt8T7d5ALhj_1bPXx-2" connectable="0" parent="7FZvt8T7d5ALhj_1bPXx-1" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=12;" value="abstract,idioma" vertex="1">
+          <mxGeometry relative="1" x="-0.1188" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="7FZvt8T7d5ALhj_1bPXx-3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;roundedPerimeter=1;" value="Source: Dataset" vertex="1">
+          <mxGeometry height="60" width="120" x="410" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7FZvt8T7d5ALhj_1bPXx-4" edge="1" parent="1" source="7FZvt8T7d5ALhj_1bPXx-10" style="edgeStyle=none;curved=1;rounded=0;curveGeometry=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;startSize=8;endSize=8;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="7FZvt8T7d5ALhj_1bPXx-15">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="7FZvt8T7d5ALhj_1bPXx-5" connectable="0" parent="7FZvt8T7d5ALhj_1bPXx-4" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=12;" value="palabra:freq" vertex="1">
+          <mxGeometry relative="1" x="-0.1439" as="geometry">
+            <mxPoint x="-134" y="50" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="7FZvt8T7d5ALhj_1bPXx-6" connectable="0" parent="7FZvt8T7d5ALhj_1bPXx-4" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];inheritText=1;fontSize=12;" value="palabras" vertex="1">
+          <mxGeometry relative="1" x="-0.0925" y="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="7FZvt8T7d5ALhj_1bPXx-7" edge="1" parent="1" source="7FZvt8T7d5ALhj_1bPXx-10" style="edgeStyle=none;curved=1;rounded=0;curveGeometry=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;defaultLabelBackgroundColor=page;startSize=8;endSize=8;" target="7FZvt8T7d5ALhj_1bPXx-17">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="7FZvt8T7d5ALhj_1bPXx-8" connectable="0" parent="7FZvt8T7d5ALhj_1bPXx-7" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];inheritText=1;fontSize=12;defaultLabelBackgroundColor=page;" value="{freq palabra:en,fr}" vertex="1">
+          <mxGeometry relative="1" x="-0.1361" y="1" as="geometry">
+            <mxPoint x="138" y="51" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="7FZvt8T7d5ALhj_1bPXx-9" connectable="0" parent="7FZvt8T7d5ALhj_1bPXx-7" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];inheritText=1;fontSize=12;defaultLabelBackgroundColor=page;" value="palabra,idioma" vertex="1">
+          <mxGeometry relative="1" x="0.0024" y="-1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="7FZvt8T7d5ALhj_1bPXx-10" parent="1" style="rounded=1;whiteSpace=wrap;html=1;roundedPerimeter=1;" value="limpieza de stopwords" vertex="1">
+          <mxGeometry height="60" width="120" x="410" y="160" as="geometry" />
+        </mxCell>
+        <mxCell id="7FZvt8T7d5ALhj_1bPXx-11" edge="1" parent="1" source="7FZvt8T7d5ALhj_1bPXx-13" style="edgeStyle=none;curved=1;rounded=0;curveGeometry=1;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=12;defaultLabelBackgroundColor=page;startSize=8;endSize=8;" target="7FZvt8T7d5ALhj_1bPXx-20">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="7FZvt8T7d5ALhj_1bPXx-12" connectable="0" parent="7FZvt8T7d5ALhj_1bPXx-11" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];inheritText=1;fontSize=12;defaultLabelBackgroundColor=page;" value="palabra:freq" vertex="1">
+          <mxGeometry relative="1" x="-0.2889" y="2" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="7FZvt8T7d5ALhj_1bPXx-13" parent="1" style="rounded=1;whiteSpace=wrap;html=1;roundedPerimeter=1;" value="Conteo parcial de frcuencia de palabras" vertex="1">
+          <mxGeometry height="60" width="120" x="160" y="265" as="geometry" />
+        </mxCell>
+        <mxCell id="7FZvt8T7d5ALhj_1bPXx-14" edge="1" parent="1" source="7FZvt8T7d5ALhj_1bPXx-15" style="edgeStyle=none;curved=1;rounded=0;curveGeometry=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;startSize=8;endSize=8;" target="7FZvt8T7d5ALhj_1bPXx-13">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="7FZvt8T7d5ALhj_1bPXx-15" parent="1" style="rounded=1;whiteSpace=wrap;html=1;" value="Conteo de palabras repetidas" vertex="1">
+          <mxGeometry height="60" width="120" x="160" y="160" as="geometry" />
+        </mxCell>
+        <mxCell id="7FZvt8T7d5ALhj_1bPXx-16" edge="1" parent="1" source="7FZvt8T7d5ALhj_1bPXx-17" style="edgeStyle=none;curved=1;rounded=0;curveGeometry=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;defaultLabelBackgroundColor=page;startSize=8;endSize=8;" target="7FZvt8T7d5ALhj_1bPXx-23">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="7FZvt8T7d5ALhj_1bPXx-17" parent="1" style="rounded=1;whiteSpace=wrap;html=1;roundedPerimeter=1;" value="Conteo de palabras por idioma" vertex="1">
+          <mxGeometry height="60" width="120" x="650" y="160" as="geometry" />
+        </mxCell>
+        <mxCell id="7FZvt8T7d5ALhj_1bPXx-18" edge="1" parent="1" source="7FZvt8T7d5ALhj_1bPXx-20" style="edgeStyle=none;curved=1;rounded=0;curveGeometry=1;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=12;defaultLabelBackgroundColor=page;startSize=8;endSize=8;" target="7FZvt8T7d5ALhj_1bPXx-24">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="7FZvt8T7d5ALhj_1bPXx-19" connectable="0" parent="7FZvt8T7d5ALhj_1bPXx-18" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];inheritText=1;fontSize=12;defaultLabelBackgroundColor=page;" value="[top 20]" vertex="1">
+          <mxGeometry relative="1" x="-0.2" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="7FZvt8T7d5ALhj_1bPXx-20" parent="1" style="rounded=1;whiteSpace=wrap;html=1;roundedPerimeter=1;" value="Top 20 palabras mas frcuentes" vertex="1">
+          <mxGeometry height="60" width="120" x="160" y="370" as="geometry" />
+        </mxCell>
+        <mxCell id="7FZvt8T7d5ALhj_1bPXx-21" edge="1" parent="1" source="7FZvt8T7d5ALhj_1bPXx-23" style="edgeStyle=none;curved=1;rounded=0;curveGeometry=1;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=12;defaultLabelBackgroundColor=page;startSize=8;endSize=8;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="710" y="370" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="7FZvt8T7d5ALhj_1bPXx-22" connectable="0" parent="7FZvt8T7d5ALhj_1bPXx-21" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];inheritText=1;fontSize=12;defaultLabelBackgroundColor=page;" value="{freq palabras: en,fr}" vertex="1">
+          <mxGeometry relative="1" x="-0.3185" y="-2" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="7FZvt8T7d5ALhj_1bPXx-23" parent="1" style="rounded=1;whiteSpace=wrap;html=1;roundedPerimeter=1;" value="Recepcion de conteos parciales" vertex="1">
+          <mxGeometry height="60" width="120" x="650" y="265" as="geometry" />
+        </mxCell>
+        <mxCell id="7FZvt8T7d5ALhj_1bPXx-24" parent="1" style="rounded=1;whiteSpace=wrap;html=1;roundedPerimeter=1;" value="Sink: resultado Q4" vertex="1">
+          <mxGeometry height="60" width="120" x="160" y="475" as="geometry" />
+        </mxCell>
+        <mxCell id="7FZvt8T7d5ALhj_1bPXx-25" parent="1" style="rounded=1;whiteSpace=wrap;html=1;roundedPerimeter=1;" value="Top 20 palabras mas frcuentes" vertex="1">
+          <mxGeometry height="60" width="120" x="650" y="370" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
