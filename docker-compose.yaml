@@ -206,6 +206,8 @@ services:
       context: ./src/
       dockerfile: q3_aggregator/Dockerfile
     container_name: q3_aggregator_0
+    volumes:
+      - q3_aggregator_0_data:/data
     environment:
       ID: "0"
       MOM_HOST: "rabbitmq"
@@ -215,6 +217,10 @@ services:
       PARSER_AMOUNT: 3
       WORD_SUM_AMOUNT: 3
       PYTHONUNBUFFERED: "1"
+      STORAGE_PATH: "/data"
+      BUCKET_AMOUNT: 32
+      FLUSH_WORDS: 10000
+      FLUSH_MESSAGES: 100
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -224,6 +230,8 @@ services:
       context: ./src/
       dockerfile: q3_aggregator/Dockerfile
     container_name: q3_aggregator_1
+    volumes:
+      - q3_aggregator_1_data:/data
     environment:
       ID: "1"
       MOM_HOST: "rabbitmq"
@@ -233,6 +241,10 @@ services:
       PARSER_AMOUNT: 3
       WORD_SUM_AMOUNT: 3
       PYTHONUNBUFFERED: "1"
+      STORAGE_PATH: "/data"
+      BUCKET_AMOUNT: 32
+      FLUSH_WORDS: 10000
+      FLUSH_MESSAGES: 100
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -242,6 +254,8 @@ services:
       context: ./src/
       dockerfile: q4_aggregator/Dockerfile
     container_name: q4_aggregator_0
+    volumes:
+      - q4_aggregator_0_data:/data
     environment:
       ID: "0"
       MOM_HOST: "rabbitmq"
@@ -250,6 +264,9 @@ services:
       PARSER_AMOUNT: 3
       WORD_SUM_AMOUNT: 3
       PYTHONUNBUFFERED: "1"
+      STORAGE_PATH: "/data"
+      BUCKET_AMOUNT: 32
+      FLUSH_WORDS: 10000
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -259,6 +276,8 @@ services:
       context: ./src/
       dockerfile: q4_aggregator/Dockerfile
     container_name: q4_aggregator_1
+    volumes:
+      - q4_aggregator_1_data:/data
     environment:
       ID: "1"
       MOM_HOST: "rabbitmq"
@@ -267,6 +286,9 @@ services:
       PARSER_AMOUNT: 3
       WORD_SUM_AMOUNT: 3
       PYTHONUNBUFFERED: "1"
+      STORAGE_PATH: "/data"
+      BUCKET_AMOUNT: 32
+      FLUSH_WORDS: 10000
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -490,3 +512,7 @@ services:
 
 volumes:
   q5_joiner_new_articles:
+  q3_aggregator_0_data:
+  q3_aggregator_1_data:
+  q4_aggregator_0_data:
+  q4_aggregator_1_data:
