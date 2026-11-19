@@ -1,7 +1,8 @@
 import logging
+import time
 
 import pika
-from pika.exceptions import AMQPError, AMQPConnectionError
+from pika.exceptions import AMQPError, AMQPConnectionError, ChannelClosed, ChannelWrongStateError
 from .middleware import (
     MessageMiddlewareQueue,
     MessageMiddlewareExchange,
@@ -26,6 +27,13 @@ DEFAULT_PREFETCH_COUNT = 10
 DEFAULT_HEARTBEAT = 120
 DEFAULT_BLOCKED_CONNECTION_TIMEOUT = 300
 
+# Cant. máxima de intentos de un envío.
+MAX_SEND_ATTEMPTS = 4
+# Segundos de espera antes de reconectar. Despues de cada intento crece
+RECONNECT_DELAY = 1
+# Errores que indican que se perdió la conexión o el canal, y que se pueden resolver reconectando
+RECONNECTABLE_ERRORS = (AMQPConnectionError, ChannelClosed, ChannelWrongStateError, OSError)
+
 DISCONNECTED_MSG = "Lost connection to RabbitMQ while {}: {!r}"
 RABBITMQ_ERROR_MSG = "RabbitMQ error while {}: {!r}"
 CLOSE_ERROR_MSG = "Error closing RabbitMQ resources: {!r}"
@@ -37,26 +45,36 @@ class _MessageMiddlewareRabbitMQBase:
     Base class for RabbitMQ-based message middleware implementations. This class provides common functionality for connecting to RabbitMQ, declaring queues and exchanges, consuming messages, and sending messages. It handles connection errors and provides methods for closing resources.
     """
     def __init__(self, host, prefetch_count):
+        self._host = host
         self._prefetch_count = prefetch_count
         self._connection = None
         self._channel = None
         self._is_consuming = False
         action = f"connecting to {host}"
         try:
-            params = pika.ConnectionParameters(
-                host=host,
-                heartbeat=DEFAULT_HEARTBEAT,
-                blocked_connection_timeout=DEFAULT_BLOCKED_CONNECTION_TIMEOUT
-            )
-            self._connection = pika.BlockingConnection(params)
-            self._channel = self._connection.channel()
-            self._declare()
+            self._connect()
         except AMQPConnectionError as e:
             self._close_quietly()
             raise MessageMiddlewareDisconnectedError(DISCONNECTED_MSG.format(action, e)) from e
         except AMQPError as e:
             self._close_quietly()
             raise MessageMiddlewareMessageError(RABBITMQ_ERROR_MSG.format(action, e)) from e
+
+    # Abre la conexión y el canal y declara los recursos de la subclase
+    def _connect(self):
+        params = pika.ConnectionParameters(
+            host=self._host,
+            heartbeat=DEFAULT_HEARTBEAT,
+            blocked_connection_timeout=DEFAULT_BLOCKED_CONNECTION_TIMEOUT
+        )
+        self._connection = pika.BlockingConnection(params)
+        self._channel = self._connection.channel()
+        self._declare()
+    
+    # Libera lo que quedaba de la conexión anterior y abre una nueva
+    def _reconnect(self):
+        self._close_quietly()
+        self._connect()
 
     def _declare(self):
         """
@@ -75,6 +93,25 @@ class _MessageMiddlewareRabbitMQBase:
                 ch.basic_nack(delivery_tag=method.delivery_tag)
             on_message_callback(body, ack, nack)
         return _internal_callback
+    
+    # Publica un mensaje usando la conexión actual. Si la conexión o el canal se cerraron, 
+    # se reconecta y reintenta publicar, hasta MAX_SEND_ATTEMPTS intentos. Si no se pudo, 
+    # el error se propaga y el nodo cae. No se reintenta indefinidamente
+    def _publish(self, exchange, routing_key, message, action):
+        last_error = None
+        for attempt in range(1, MAX_SEND_ATTEMPTS + 1):
+            try:
+                if attempt > 1:
+                    time.sleep(RECONNECT_DELAY * (attempt - 1)) # el delay crece (1s, 2s, 3s, ...)
+                    self._reconnect()
+                self._channel.basic_publish(exchange=exchange, routing_key=routing_key, body=message)
+                return
+            except RECONNECTABLE_ERRORS as e:
+                last_error = e
+                logging.warning(f"Connection problem while {action} (attempt {attempt}/{MAX_SEND_ATTEMPTS}): {e!r}")
+            except AMQPError as e:
+                raise MessageMiddlewareMessageError(RABBITMQ_ERROR_MSG.format(action, e)) from e
+        raise MessageMiddlewareDisconnectedError(DISCONNECTED_MSG.format(action, last_error)) from last_error
 
     def _consume(self, queue_name, on_message_callback):
         """
@@ -180,15 +217,10 @@ class MessageMiddlewareQueueRabbitMQ(_MessageMiddlewareRabbitMQBase, MessageMidd
 
     def send(self, message):
         """
-        Sends a message to the queue. The message is published to the specified queue name. This method handles connection errors and ensures that the message is sent successfully.
+        Sends a message to the queue, reconnecting and retrying if the connection was lost. The message is published to the specified queue name.
         """
         action = f"sending to queue {self._queue_name}"
-        try:
-            self._channel.basic_publish(exchange='', routing_key=self._queue_name, body=message)
-        except AMQPConnectionError as e:
-            raise MessageMiddlewareDisconnectedError(DISCONNECTED_MSG.format(action, e)) from e
-        except AMQPError as e:
-            raise MessageMiddlewareMessageError(RABBITMQ_ERROR_MSG.format(action, e)) from e
+        self._publish('', self._queue_name, message, action)
 
         
 class MessageMiddlewareExchangeRabbitMQ(_MessageMiddlewareRabbitMQBase, MessageMiddlewareExchange):
@@ -268,12 +300,7 @@ class MessageMiddlewareExchangeRabbitMQ(_MessageMiddlewareRabbitMQBase, MessageM
             
     def send_to(self, routing_key, message):
         """
-        Publishes a message to the specified routing key on the exchange. This method allows sending messages to specific routing keys, enabling targeted message delivery to consumers that are bound to those keys.
+        Publishes a message to the specified routing key on the exchange, reconnecting and retrying if the connection was lost. This method allows sending messages to specific routing keys, enabling targeted message delivery to consumers that are bound to those keys.
         """
         action = f"sending to exchange {self._exchange_name} with routing key {routing_key}"
-        try:
-            self._channel.basic_publish(exchange=self._exchange_name, routing_key=routing_key, body=message)
-        except AMQPConnectionError as e:
-            raise MessageMiddlewareDisconnectedError(DISCONNECTED_MSG.format(action, e)) from e
-        except AMQPError as e:
-            raise MessageMiddlewareMessageError(RABBITMQ_ERROR_MSG.format(action, e)) from e
+        self._publish(self._exchange_name, routing_key, message, action)

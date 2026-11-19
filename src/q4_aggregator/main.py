@@ -43,9 +43,10 @@ class Q4Aggregator:
     """
     def __init__(self):
         """
-        Initializes the Q4Aggregator by setting up the input group member, buffers, storages, and EOF tracking for each client. It also sets up a signal handler for SIGTERM to allow graceful shutdown.
+        Initializes the Q4Aggregator by setting up the input group member, the sender to the joiner, buffers, storages, and EOF tracking for each client. It also sets up a signal handler for SIGTERM to allow graceful shutdown.
         """
         self._input = GroupMember(MOM_HOST, INPUT_GROUP, ID)
+        self._joiner = GroupSender(MOM_HOST, JOINER_GROUP, JOINER_AMOUNT)
         self._buffers_by_client = {}   # client_id -> {word: [total]} with the totals accumulated in memory
         self._storages_by_client = {}  # client_id -> BucketStorage with the totals stored on disk
         self._eofs_by_client = {}      # client_id -> set with the sender_id of the received EOFs
@@ -60,12 +61,13 @@ class Q4Aggregator:
 
     def _close(self):
         """
-        Closes the input group member, handling any exceptions that may occur during the close operation. This is called when the aggregator is shutting down to ensure that resources are released properly.
+        Closes the input group member and the joiner sender, handling any exceptions that may occur during the close operation. This is called when the aggregator is shutting down to ensure that resources are released properly.
         """
-        try:
-            self._input.close()
-        except MessageMiddlewareCloseError as e:
-            logging.error(e)
+        for connection in (self._input, self._joiner):
+            try:
+                connection.close()
+            except MessageMiddlewareCloseError as e:
+                logging.error(e)
 
     def _process_data(self, client_id, records):
         """
@@ -128,15 +130,8 @@ class Q4Aggregator:
             self._buffers_by_client.pop(client_id)
             storage = self._storages_by_client.pop(client_id)
             top = self._top_words(storage)
-        joiner = GroupSender(MOM_HOST, JOINER_GROUP, JOINER_AMOUNT)
-        try:
-            joiner.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q4, top))
-            joiner.send(message_protocol.internal.serialize_eof(client_id, ID))
-        finally:
-            try:
-                joiner.close()
-            except MessageMiddlewareCloseError as e:
-                logging.error(e)
+        self._joiner.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q4, top))
+        self._joiner.send(message_protocol.internal.serialize_eof(client_id, ID))
         if storage is not None:
             storage.delete()
         logging.info(f"Client {client_id} finished: sent top {len(top)}")
