@@ -11,6 +11,10 @@ from .middleware import (
     MessageMiddlewareCloseError
 )
 
+# Mostramos solo los errores críticos de pika, para no ensuciar los logs con errores de conexión
+# que el middleware ya maneja y no se pueden atrapar
+logging.getLogger("pika").setLevel(logging.CRITICAL)
+
 """
 Default configuration values for RabbitMQ connections and operations.
 - DEFAULT_PREFETCH_COUNT: The default number of messages to prefetch from the queue.
