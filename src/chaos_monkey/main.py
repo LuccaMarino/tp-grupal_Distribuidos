@@ -2,7 +2,7 @@ import json
 import os
 import random
 import time
-from chaos_monkey.docker_client import DockerClient
+from docker_client import DockerClient
 import logging
 
 INITIAL_DELAY_SECONDS = int(os.environ.get("INITIAL_DELAY_SECONDS", 10))
@@ -19,16 +19,17 @@ class ChaosMonkey:
             targets = self.docker_client.get_targets()
             if targets:
                 target = random.choice(targets)
-                logging.info(level=logging.INFO, msg="Killing container: %s", args=(target.name,))
+                logging.info( "Killing container: %s", target.name)
                 self.docker_client.kill(target)
             else:
-                logging.info(level=logging.INFO, msg="No targets found to kill.")
+                logging.info( "No targets found to kill.")
             interval = random.randint(MIN_INTERVAL_SECONDS, MAX_INTERVAL_SECONDS)
-            logging.info(level=logging.INFO, msg="Next kill in %d seconds", args=(interval,))
+            logging.info( "Next kill in %d seconds", interval)
             time.sleep(interval)
 
 def main():
-    logging.info(level=logging.INFO, msg="Chaos Monkey started. Initial delay: %d seconds", args=(INITIAL_DELAY_SECONDS,))
+    logging.basicConfig(level=logging.INFO)
+    logging.info( "Chaos Monkey started. Initial delay: %d seconds", INITIAL_DELAY_SECONDS)
     docker_client = DockerClient()
     chaos_monkey = ChaosMonkey(docker_client)
     chaos_monkey.run()
