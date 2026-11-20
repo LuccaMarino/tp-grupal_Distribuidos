@@ -54,6 +54,10 @@ services:
     - 15672:15672
 
   parser_0:
+    labels:
+      chaos.monkey.enabled: "true"
+      chaos.monkey.group: "parser"
+      chaos.monkey.id: "parser_0"
     build:
       context: ./src/
       dockerfile: parser/Dockerfile
@@ -76,6 +80,10 @@ services:
         condition: service_healthy
 
   parser_1:
+    labels:
+      chaos.monkey.enabled: "true"
+      chaos.monkey.group: "parser"
+      chaos.monkey.id: "parser_1"
     build:
       context: ./src/
       dockerfile: parser/Dockerfile
@@ -98,6 +106,10 @@ services:
         condition: service_healthy
 
   parser_2:
+    labels:
+      chaos.monkey.enabled: "true"
+      chaos.monkey.group: "parser"
+      chaos.monkey.id: "parser_2"
     build:
       context: ./src/
       dockerfile: parser/Dockerfile
@@ -120,6 +132,10 @@ services:
         condition: service_healthy
 
   image_downloader_0:
+    labels:
+      chaos.monkey.enabled: "true"
+      chaos.monkey.group: "image_downloader"
+      chaos.monkey.id: "image_downloader_0"
     build:
       context: ./src/
       dockerfile: image_downloader/Dockerfile
@@ -139,6 +155,10 @@ services:
         condition: service_healthy
 
   word_sum_0:
+    labels:
+      chaos.monkey.enabled: "true"
+      chaos.monkey.group: "word_sum"
+      chaos.monkey.id: "word_sum_0"
     build:
       context: ./src/
       dockerfile: word_sum/Dockerfile
@@ -160,6 +180,10 @@ services:
         condition: service_healthy
 
   word_sum_1:
+    labels:
+      chaos.monkey.enabled: "true"
+      chaos.monkey.group: "word_sum"
+      chaos.monkey.id: "word_sum_1"
     build:
       context: ./src/
       dockerfile: word_sum/Dockerfile
@@ -181,6 +205,10 @@ services:
         condition: service_healthy
 
   word_sum_2:
+    labels:
+      chaos.monkey.enabled: "true"
+      chaos.monkey.group: "word_sum"
+      chaos.monkey.id: "word_sum_2"
     build:
       context: ./src/
       dockerfile: word_sum/Dockerfile
@@ -202,6 +230,10 @@ services:
         condition: service_healthy
 
   q3_aggregator_0:
+    labels:
+      chaos.monkey.enabled: "true"
+      chaos.monkey.group: "q3_aggregator"
+      chaos.monkey.id: "q3_aggregator_0"
     build:
       context: ./src/
       dockerfile: q3_aggregator/Dockerfile
@@ -226,6 +258,10 @@ services:
         condition: service_healthy
 
   q3_aggregator_1:
+    labels:
+      chaos.monkey.enabled: "true"
+      chaos.monkey.group: "q3_aggregator"
+      chaos.monkey.id: "q3_aggregator_1"
     build:
       context: ./src/
       dockerfile: q3_aggregator/Dockerfile
@@ -250,6 +286,10 @@ services:
         condition: service_healthy
 
   q4_aggregator_0:
+    labels:
+      chaos.monkey.enabled: "true"
+      chaos.monkey.group: "q4_aggregator"
+      chaos.monkey.id: "q4_aggregator_0"
     build:
       context: ./src/
       dockerfile: q4_aggregator/Dockerfile
@@ -272,6 +312,10 @@ services:
         condition: service_healthy
 
   q4_aggregator_1:
+    labels:
+      chaos.monkey.enabled: "true"
+      chaos.monkey.group: "q4_aggregator"
+      chaos.monkey.id: "q4_aggregator_1"
     build:
       context: ./src/
       dockerfile: q4_aggregator/Dockerfile
@@ -294,6 +338,10 @@ services:
         condition: service_healthy
 
   q4_joiner_0:
+    labels:
+      chaos.monkey.enabled: "true"
+      chaos.monkey.group: "q4_joiner"
+      chaos.monkey.id: "q4_joiner_0"
     build:
       context: ./src/
       dockerfile: q4_joiner/Dockerfile
@@ -311,6 +359,10 @@ services:
         condition: service_healthy
 
   word_counter_0:
+    labels:
+      chaos.monkey.enabled: "true"
+      chaos.monkey.group: "word_counter"
+      chaos.monkey.id: "word_counter_0"
     build:
       context: ./src/
       dockerfile: word_counter/Dockerfile
@@ -330,6 +382,10 @@ services:
         condition: service_healthy
 
   word_counter_1:
+    labels:
+      chaos.monkey.enabled: "true"
+      chaos.monkey.group: "word_counter"
+      chaos.monkey.id: "word_counter_1"
     build:
       context: ./src/
       dockerfile: word_counter/Dockerfile
@@ -349,6 +405,10 @@ services:
         condition: service_healthy
 
   word_counter_2:
+    labels:
+      chaos.monkey.enabled: "true"
+      chaos.monkey.group: "word_counter"
+      chaos.monkey.id: "word_counter_2"
     build:
       context: ./src/
       dockerfile: word_counter/Dockerfile
@@ -368,6 +428,10 @@ services:
         condition: service_healthy
 
   q5_joiner_0:
+    labels:
+      chaos.monkey.enabled: "true"
+      chaos.monkey.group: "q5_joiner"
+      chaos.monkey.id: "q5_joiner_0"
     build:
       context: ./src/
       dockerfile: q5_joiner/Dockerfile
@@ -402,113 +466,124 @@ services:
       OUTPUT_FILE_Q5: "/output/client_0_output_q5.csv"
       INPUT_DIR: "/datasets/client_0"
 
-  client_1:
-    <<: *client-base
-    container_name: client_1
-    environment:
-      <<: *client-env
-      OUTPUT_FILE_Q1: "/output/client_1_output_q1.csv"
-      OUTPUT_FILE_Q2: "/output/client_1_output_q2.csv"
-      OUTPUT_FILE_Q3: "/output/client_1_output_q3.csv"
-      OUTPUT_FILE_Q4: "/output/client_1_output_q4.csv"
-      OUTPUT_FILE_Q5: "/output/client_1_output_q5.csv"
-      INPUT_DIR: "/datasets/client_1"
+  # client_1:
+  #   <<: *client-base
+  #   container_name: client_1
+  #   environment:
+  #     <<: *client-env
+  #     OUTPUT_FILE_Q1: "/output/client_1_output_q1.csv"
+  #     OUTPUT_FILE_Q2: "/output/client_1_output_q2.csv"
+  #     OUTPUT_FILE_Q3: "/output/client_1_output_q3.csv"
+  #     OUTPUT_FILE_Q4: "/output/client_1_output_q4.csv"
+  #     OUTPUT_FILE_Q5: "/output/client_1_output_q5.csv"
+  #     INPUT_DIR: "/datasets/client_1"
 
-  client_2:
-    <<: *client-base
-    container_name: client_2
-    environment:
-      <<: *client-env
-      OUTPUT_FILE_Q1: "/output/client_2_output_q1.csv"
-      OUTPUT_FILE_Q2: "/output/client_2_output_q2.csv"
-      OUTPUT_FILE_Q3: "/output/client_2_output_q3.csv"
-      OUTPUT_FILE_Q4: "/output/client_2_output_q4.csv"
-      OUTPUT_FILE_Q5: "/output/client_2_output_q5.csv"
-      INPUT_DIR: "/datasets/client_2"
+  # client_2:
+  #   <<: *client-base
+  #   container_name: client_2
+  #   environment:
+  #     <<: *client-env
+  #     OUTPUT_FILE_Q1: "/output/client_2_output_q1.csv"
+  #     OUTPUT_FILE_Q2: "/output/client_2_output_q2.csv"
+  #     OUTPUT_FILE_Q3: "/output/client_2_output_q3.csv"
+  #     OUTPUT_FILE_Q4: "/output/client_2_output_q4.csv"
+  #     OUTPUT_FILE_Q5: "/output/client_2_output_q5.csv"
+  #     INPUT_DIR: "/datasets/client_2"
 
-  client_3:
-    <<: *client-base
-    container_name: client_3
-    environment:
-      <<: *client-env
-      OUTPUT_FILE_Q1: "/output/client_3_output_q1.csv"
-      OUTPUT_FILE_Q2: "/output/client_3_output_q2.csv"
-      OUTPUT_FILE_Q3: "/output/client_3_output_q3.csv"
-      OUTPUT_FILE_Q4: "/output/client_3_output_q4.csv"
-      OUTPUT_FILE_Q5: "/output/client_3_output_q5.csv"
-      INPUT_DIR: "/datasets/client_3"
+  # client_3:
+  #   <<: *client-base
+  #   container_name: client_3
+  #   environment:
+  #     <<: *client-env
+  #     OUTPUT_FILE_Q1: "/output/client_3_output_q1.csv"
+  #     OUTPUT_FILE_Q2: "/output/client_3_output_q2.csv"
+  #     OUTPUT_FILE_Q3: "/output/client_3_output_q3.csv"
+  #     OUTPUT_FILE_Q4: "/output/client_3_output_q4.csv"
+  #     OUTPUT_FILE_Q5: "/output/client_3_output_q5.csv"
+  #     INPUT_DIR: "/datasets/client_3"
 
-  client_4:
-    <<: *client-base
-    container_name: client_4
-    environment:
-      <<: *client-env
-      OUTPUT_FILE_Q1: "/output/client_4_output_q1.csv"
-      OUTPUT_FILE_Q2: "/output/client_4_output_q2.csv"
-      OUTPUT_FILE_Q3: "/output/client_4_output_q3.csv"
-      OUTPUT_FILE_Q4: "/output/client_4_output_q4.csv"
-      OUTPUT_FILE_Q5: "/output/client_4_output_q5.csv"
-      INPUT_DIR: "/datasets/client_4"
+  # client_4:
+  #   <<: *client-base
+  #   container_name: client_4
+  #   environment:
+  #     <<: *client-env
+  #     OUTPUT_FILE_Q1: "/output/client_4_output_q1.csv"
+  #     OUTPUT_FILE_Q2: "/output/client_4_output_q2.csv"
+  #     OUTPUT_FILE_Q3: "/output/client_4_output_q3.csv"
+  #     OUTPUT_FILE_Q4: "/output/client_4_output_q4.csv"
+  #     OUTPUT_FILE_Q5: "/output/client_4_output_q5.csv"
+  #     INPUT_DIR: "/datasets/client_4"
 
-  client_5:
-    <<: *client-base
-    container_name: client_5
-    environment:
-      <<: *client-env
-      OUTPUT_FILE_Q1: "/output/client_5_output_q1.csv"
-      OUTPUT_FILE_Q2: "/output/client_5_output_q2.csv"
-      OUTPUT_FILE_Q3: "/output/client_5_output_q3.csv"
-      OUTPUT_FILE_Q4: "/output/client_5_output_q4.csv"
-      OUTPUT_FILE_Q5: "/output/client_5_output_q5.csv"
-      INPUT_DIR: "/datasets/client_5"
+  # client_5:
+  #   <<: *client-base
+  #   container_name: client_5
+  #   environment:
+  #     <<: *client-env
+  #     OUTPUT_FILE_Q1: "/output/client_5_output_q1.csv"
+  #     OUTPUT_FILE_Q2: "/output/client_5_output_q2.csv"
+  #     OUTPUT_FILE_Q3: "/output/client_5_output_q3.csv"
+  #     OUTPUT_FILE_Q4: "/output/client_5_output_q4.csv"
+  #     OUTPUT_FILE_Q5: "/output/client_5_output_q5.csv"
+  #     INPUT_DIR: "/datasets/client_5"
 
-  client_6:
-    <<: *client-base
-    container_name: client_6
-    environment:
-      <<: *client-env
-      OUTPUT_FILE_Q1: "/output/client_6_output_q1.csv"
-      OUTPUT_FILE_Q2: "/output/client_6_output_q2.csv"
-      OUTPUT_FILE_Q3: "/output/client_6_output_q3.csv"
-      OUTPUT_FILE_Q4: "/output/client_6_output_q4.csv"
-      OUTPUT_FILE_Q5: "/output/client_6_output_q5.csv"
-      INPUT_DIR: "/datasets/client_6"
+  # client_6:
+  #   <<: *client-base
+  #   container_name: client_6
+  #   environment:
+  #     <<: *client-env
+  #     OUTPUT_FILE_Q1: "/output/client_6_output_q1.csv"
+  #     OUTPUT_FILE_Q2: "/output/client_6_output_q2.csv"
+  #     OUTPUT_FILE_Q3: "/output/client_6_output_q3.csv"
+  #     OUTPUT_FILE_Q4: "/output/client_6_output_q4.csv"
+  #     OUTPUT_FILE_Q5: "/output/client_6_output_q5.csv"
+  #     INPUT_DIR: "/datasets/client_6"
 
-  client_7:
-    <<: *client-base
-    container_name: client_7
-    environment:
-      <<: *client-env
-      OUTPUT_FILE_Q1: "/output/client_7_output_q1.csv"
-      OUTPUT_FILE_Q2: "/output/client_7_output_q2.csv"
-      OUTPUT_FILE_Q3: "/output/client_7_output_q3.csv"
-      OUTPUT_FILE_Q4: "/output/client_7_output_q4.csv"
-      OUTPUT_FILE_Q5: "/output/client_7_output_q5.csv"
-      INPUT_DIR: "/datasets/client_7"
+  # client_7:
+  #   <<: *client-base
+  #   container_name: client_7
+  #   environment:
+  #     <<: *client-env
+  #     OUTPUT_FILE_Q1: "/output/client_7_output_q1.csv"
+  #     OUTPUT_FILE_Q2: "/output/client_7_output_q2.csv"
+  #     OUTPUT_FILE_Q3: "/output/client_7_output_q3.csv"
+  #     OUTPUT_FILE_Q4: "/output/client_7_output_q4.csv"
+  #     OUTPUT_FILE_Q5: "/output/client_7_output_q5.csv"
+  #     INPUT_DIR: "/datasets/client_7"
 
-  client_8:
-    <<: *client-base
-    container_name: client_8
-    environment:
-      <<: *client-env
-      OUTPUT_FILE_Q1: "/output/client_8_output_q1.csv"
-      OUTPUT_FILE_Q2: "/output/client_8_output_q2.csv"
-      OUTPUT_FILE_Q3: "/output/client_8_output_q3.csv"
-      OUTPUT_FILE_Q4: "/output/client_8_output_q4.csv"
-      OUTPUT_FILE_Q5: "/output/client_8_output_q5.csv"
-      INPUT_DIR: "/datasets/client_8"
+  # client_8:
+  #   <<: *client-base
+  #   container_name: client_8
+  #   environment:
+  #     <<: *client-env
+  #     OUTPUT_FILE_Q1: "/output/client_8_output_q1.csv"
+  #     OUTPUT_FILE_Q2: "/output/client_8_output_q2.csv"
+  #     OUTPUT_FILE_Q3: "/output/client_8_output_q3.csv"
+  #     OUTPUT_FILE_Q4: "/output/client_8_output_q4.csv"
+  #     OUTPUT_FILE_Q5: "/output/client_8_output_q5.csv"
+  #     INPUT_DIR: "/datasets/client_8"
 
-  client_9:
-    <<: *client-base
-    container_name: client_9
+  # client_9:
+  #   <<: *client-base
+  #   container_name: client_9
+  #   environment:
+  #     <<: *client-env
+  #     OUTPUT_FILE_Q1: "/output/client_9_output_q1.csv"
+  #     OUTPUT_FILE_Q2: "/output/client_9_output_q2.csv"
+  #     OUTPUT_FILE_Q3: "/output/client_9_output_q3.csv"
+  #     OUTPUT_FILE_Q4: "/output/client_9_output_q4.csv"
+  #     OUTPUT_FILE_Q5: "/output/client_9_output_q5.csv"
+  #     INPUT_DIR: "/datasets/client_9"
+
+  chaos_monkey:
+    build:
+      context: ./src/
+      dockerfile: chaos_monkey/Dockerfile
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      <<: *client-env
-      OUTPUT_FILE_Q1: "/output/client_9_output_q1.csv"
-      OUTPUT_FILE_Q2: "/output/client_9_output_q2.csv"
-      OUTPUT_FILE_Q3: "/output/client_9_output_q3.csv"
-      OUTPUT_FILE_Q4: "/output/client_9_output_q4.csv"
-      OUTPUT_FILE_Q5: "/output/client_9_output_q5.csv"
-      INPUT_DIR: "/datasets/client_9"
+      INITIAL_DELAY_SECONDS: 10
+      MIN_INTERVAL_SECONDS: 10
+      MAX_INTERVAL_SECONDS: 10
 
 volumes:
   q5_joiner_new_articles:
