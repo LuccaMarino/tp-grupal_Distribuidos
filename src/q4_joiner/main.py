@@ -30,9 +30,10 @@ class Q4Joiner:
     """
     def __init__(self):
         """
-        Initializes the Q4Joiner by setting up the input group member, buffers for top words, and EOF tracking for each client.
+        Initializes the Q4Joiner by setting up the input group member, the results sender to the gateway, buffers for top words, and EOF tracking for each client.
         """
         self._input = GroupMember(MOM_HOST, INPUT_GROUP, ID)
+        self._results = GroupSender(MOM_HOST, RESULTS_GROUP, GATEWAY_AMOUNT)
         self._tops_by_client = {}    # client_id -> list of [word, total] with the top 20 words accumulated for this client
         self._eofs_by_client = {}    # client_id -> set with the sender_id of the received EOFs
         signal.signal(signal.SIGTERM, self._handle_sigterm)
@@ -46,12 +47,13 @@ class Q4Joiner:
 
     def _close(self):
         """
-        Closes the input group member, handling any exceptions that may occur during the close operation.
+        Closes the input group member and the results sender, handling any exceptions that may occur during the close operation.
         """
-        try:
-            self._input.close()
-        except MessageMiddlewareCloseError as e:
-            logging.error(e)
+        for connection in (self._input, self._results):
+            try:
+                connection.close()
+            except MessageMiddlewareCloseError as e:
+                logging.error(e)
 
     def _process_query_result(self, client_id, query, records):
         """
@@ -85,20 +87,13 @@ class Q4Joiner:
 
     def _flush_client(self, client_id):
         """
-        Flushes the remaining top words for the specified client and sends the results along with an EOF message to the gateway. After sending, it cleans up by deleting the state associated with that client. Output connection is opened here for the first time and closed after the flush to avoid being idle while waiting for the top words from the q4_aggregators.
+        Sends the global top 20 words for the specified client along with an EOF message to the gateway. After sending, it cleans up the state associated with that client.
         """
         top = self._tops_by_client.pop(client_id, [])
         self._eofs_by_client.pop(client_id)
         logging.info(f"Client {client_id} finished: sending top {len(top)}")
-        results = GroupSender(MOM_HOST, RESULTS_GROUP, GATEWAY_AMOUNT)
-        try:
-            results.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q4, top))
-            results.send(message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q4, ID))
-        finally:
-            try:
-                results.close()
-            except MessageMiddlewareCloseError as e:
-                logging.error(e)
+        self._results.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q4, top))
+        self._results.send(message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q4, ID))
     
     def _process_message(self, message, ack, nack):
         """
