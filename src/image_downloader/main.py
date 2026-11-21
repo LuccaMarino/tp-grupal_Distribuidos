@@ -68,14 +68,14 @@ class ImageDownloader:
                     logging.error("ERROR for URL %s: HTTP status code %d", url, status_code)
                     return False, "ERROR: HTTP Error"
                 if status_code == TOO_MANY_REQUESTS_STATUS_CODE:
-                    retry_after = response.headers.get("Retry-After")
+                    retry_after = e.response.headers.get("Retry-After")
                     delay = float(retry_after) if retry_after else max(3.0, RETRY_DELAY * (2 ** attempt))
                 else:
                     delay = RETRY_DELAY * (2 ** attempt)
                 if attempt == (MAX_RETRIES - 1):
                     logging.error("Max retries exceeded for URL %s", url)
                     return False, "ERROR: HTTP max retries exceeded"
-            except requests.Timeout:
+            except (requests.Timeout, requests.RequestException):
                 if attempt == (MAX_RETRIES - 1):
                     logging.error("Max retries exceeded for URL %s", url)
                     return False, "ERROR: HTTP max retries exceeded"
@@ -98,26 +98,21 @@ class ImageDownloader:
         """
         Handles the image download request by downloading the requested images and sending the downloaded images to the output group. It implements rate limiting to avoid overwhelming the server with requests. If the download is successful, it sends a query result with the downloaded images. If the download fails, it logs a warning message.
         """
-        try:
-            images = []
-            for [name, url, image_url] in fields:
-                success, image_content = self.download_image(image_url)
-                if success:
-                    image_content_b64 = base64.b64encode(image_content).decode("ascii")
-                else:
-                    image_content_b64 = image_content
-                images.append([name, url, image_content_b64])
-                time.sleep(RATE_LIMITING_DELAY)
-                if len(images) >= MAX_IMAGES:
-                    self.output_group.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q2, images))
-                    images = []
-            self.output_group.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q2, images))
-        except requests.HTTPError as e:
-            logging.warning("Downloading image failed for %s (%s): %s", url, image_url, e)
-        except Exception as e:
-            logging.exception("Error processing image download request for client %s: %s", client_id, e)
+        images = []
+        for [name, url, image_url] in fields:
+            success, image_content = self.download_image(image_url)
+            if success:
+                image_content_b64 = base64.b64encode(image_content).decode("ascii")
+            else:
+                image_content_b64 = image_content
+            images.append([name, url, image_content_b64])
+            time.sleep(RATE_LIMITING_DELAY)
+            if len(images) >= MAX_IMAGES:
+                self.output_group.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q2, images))
+                images = []
+        self.output_group.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q2, images))
 
-    def consume_message(self, message, ack, _nack):
+    def consume_message(self, message, ack, nack):
         """
         Consumes a message from the input group, deserializes it, and processes it based on its type (EOF or DATA).
         """
@@ -137,7 +132,7 @@ class ImageDownloader:
             ack()
         except Exception as e:
             logging.exception("Error processing image download request for client %s: %s", client_id, e)
-            _nack()
+            nack()
 
     def start(self):
         try:
