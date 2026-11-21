@@ -4,6 +4,7 @@ import signal
 
 from common import message_protocol
 from common.bucket_storage import BucketStorage
+from common.heartbeat import HeartbeatResponder
 from common.middleware import GroupMember, GroupSender
 from common.middleware.middleware import MessageMiddlewareCloseError
 
@@ -161,8 +162,13 @@ class Q4Aggregator:
 def main():
     logging.basicConfig(level=logging.INFO)
     logging.info("Starting q4 aggregator service...")
+    heartbeat_responder = HeartbeatResponder()
+    heartbeat_responder.start()
     q4_aggregator = Q4Aggregator()
-    q4_aggregator.start()
+    try:
+        q4_aggregator.start()
+    finally:
+        heartbeat_responder.stop()
     return 0
 
 if __name__ == "__main__":

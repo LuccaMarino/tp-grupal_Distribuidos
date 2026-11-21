@@ -1,6 +1,7 @@
 import json
 
 from common import message_protocol
+from common.heartbeat import HeartbeatResponder
 from common.middleware import GroupMember, GroupSender
 from common.middleware.middleware import MessageMiddlewareCloseError
 from datetime import datetime, timezone
@@ -187,8 +188,13 @@ class Parser:
 def main():
     logging.basicConfig(level=logging.INFO)
     logging.info("Starting parser service...")
+    heartbeat_responder = HeartbeatResponder()
+    heartbeat_responder.start()
     parser = Parser()
-    parser.start()
+    try:
+        parser.start()
+    finally:
+        heartbeat_responder.stop()
     return 0
 
 if __name__ == "__main__":

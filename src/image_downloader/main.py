@@ -1,4 +1,5 @@
 import requests
+from common.heartbeat import HeartbeatResponder
 from common.middleware import GroupMember, GroupSender
 from common import message_protocol
 import logging
@@ -147,8 +148,13 @@ class ImageDownloader:
 def main():
     logging.basicConfig(level=logging.INFO)
     logging.info("Starting image downloader service...")
+    heartbeat_responder = HeartbeatResponder()
+    heartbeat_responder.start()
     image_downloader = ImageDownloader()
-    image_downloader.start()
+    try:
+        image_downloader.start()
+    finally:
+        heartbeat_responder.stop()
 
 if __name__ == "__main__":
     main()

@@ -3,6 +3,7 @@ import os
 import signal
 
 from common import message_protocol
+from common.heartbeat import HeartbeatResponder
 from common.middleware import GroupMember, GroupSender
 from common.middleware.middleware import MessageMiddlewareCloseError
 
@@ -101,8 +102,13 @@ class WordCounter:
 def main():
     logging.basicConfig(level=logging.INFO)
     logging.info("Starting word counter service...")
+    heartbeat_responder = HeartbeatResponder()
+    heartbeat_responder.start()
     word_counter = WordCounter()
-    word_counter.start()
+    try:
+        word_counter.start()
+    finally:
+        heartbeat_responder.stop()
     return 0
 
 if __name__ == "__main__":

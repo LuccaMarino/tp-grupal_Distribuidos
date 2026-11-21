@@ -4,6 +4,7 @@ import re
 import signal
 
 from common import message_protocol
+from common.heartbeat import HeartbeatResponder
 from common.middleware import GroupMember, GroupSender
 from common.middleware.middleware import MessageMiddlewareCloseError
 import stopwords
@@ -163,8 +164,13 @@ class WordSum:
 def main():
     logging.basicConfig(level=logging.INFO)
     logging.info("Starting word sum service...")
+    heartbeat_responder = HeartbeatResponder()
+    heartbeat_responder.start()
     word_sum = WordSum()
-    word_sum.start()
+    try:
+        word_sum.start()
+    finally:
+        heartbeat_responder.stop()
     return 0
 
 

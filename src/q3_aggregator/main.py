@@ -4,6 +4,7 @@ import signal
 
 from common import message_protocol
 from common.bucket_storage import BucketStorage
+from common.heartbeat import HeartbeatResponder
 from common.middleware import GroupMember, GroupSender
 from common.middleware.middleware import MessageMiddlewareCloseError
 
@@ -172,8 +173,13 @@ class Q3Aggregator:
 def main():
     logging.basicConfig(level=logging.INFO)
     logging.info("Starting q3 aggregator service...")
+    heartbeat_responder = HeartbeatResponder()
+    heartbeat_responder.start()
     q3_aggregator = Q3Aggregator()
-    q3_aggregator.start()
+    try:
+        q3_aggregator.start()
+    finally:
+        heartbeat_responder.stop()
     return 0
 
 
