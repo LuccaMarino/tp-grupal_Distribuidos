@@ -136,15 +136,12 @@ class Parser:
         """
         Consumes an EOF message from the input group and broadcasts the EOF message to the output groups (q1, q2, abstract).
         """
-        try:
-            eof_query_result = message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q1, ID)
-            self.q1_group.broadcast(eof_query_result)
-            eof_message = message_protocol.internal.serialize_eof(client_id, ID)
-            self.q2_group.broadcast(eof_message)
-            self.abstract_group.broadcast(eof_message)
-            logging.info("Sent EOF message to abstract group")
-        except Exception:
-            logging.exception("Error processing EOF message")
+        eof_query_result = message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q1, ID)
+        self.q1_group.broadcast(eof_query_result)
+        eof_message = message_protocol.internal.serialize_eof(client_id, ID)
+        self.q2_group.broadcast(eof_message)
+        self.abstract_group.broadcast(eof_message)
+        logging.info("Sent EOF message to abstract group")
     
     def consume_message(self, message, ack, nack):
         """
