@@ -3,7 +3,8 @@ import socket
 import threading
 import time
 
-from protocol import BullyMessageType, deserialize, serialize
+from common.message_protocol import monitor as monitor_protocol
+from common.message_protocol.monitor import BullyMessageType
 
 LEADER_HEARTBEAT_INTERVAL = 1.0
 LEADER_TIMEOUT = 5.0
@@ -53,7 +54,7 @@ class BullyElection:
 
     def _send(self, target_host: str, msg_type: BullyMessageType):
         def _send_async():
-            data = serialize(msg_type, self.id)
+            data = monitor_protocol.serialize(msg_type, self.id)
             try:
                 self._socket.sendto(data, (target_host, self.port))
                 logging.debug(f"Sent {msg_type} to {target_host}")
@@ -135,7 +136,7 @@ class BullyElection:
         while not self._stop_event.is_set():
             try:
                 data, addr = self._socket.recvfrom(256)
-                msg_type, sender_id = deserialize(data)
+                msg_type, sender_id = monitor_protocol.deserialize(data)
                 logging.debug(f"Received {msg_type} from {sender_id} at {addr}")
 
                 if msg_type == BullyMessageType.ELECTION:
