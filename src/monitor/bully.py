@@ -2,6 +2,7 @@ import logging
 import socket
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 from common.message_protocol import monitor as monitor_protocol
 from common.message_protocol.monitor import BullyMessageType
@@ -11,8 +12,8 @@ LEADER_TIMEOUT = 5.0
 ELECTION_TIMEOUT = 1.0
 
 DEFAULT_HOST = "0.0.0.0"
-
-
+MAX_WORKERS = 4
+JOIN_TIMEOUT = 1.0
 class BullyElection:
     """
     Implements the Bully election algorithm for leader election among distributed monitors.
@@ -30,6 +31,8 @@ class BullyElection:
         self._election_in_progress = False
         self._got_alive = False
         self._stop_event = threading.Event()
+        self._executor = ThreadPoolExecutor(max_workers=MAX_WORKERS, thread_name_prefix="bully-worker")
+        self._threads: list[threading.Thread] = []
 
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -41,9 +44,13 @@ class BullyElection:
             return self._leader_id == self.id
 
     def start(self):
-        threading.Thread(target=self._listen_loop, name="bully-listener", daemon=True).start()
-        threading.Thread(target=self._heartbeat_loop, name="bully-heartbeat", daemon=True).start()
-        threading.Thread(target=self.start_election, name="bully-initial-election", daemon=True).start()
+        self._threads = [
+            threading.Thread(target=self._listen_loop, name="bully-listener", daemon=True),
+            threading.Thread(target=self._heartbeat_loop, name="bully-heartbeat", daemon=True),
+        ]
+        for t in self._threads:
+            t.start()
+        self._trigger_election()
 
     def stop(self):
         self._stop_event.set()
@@ -51,9 +58,28 @@ class BullyElection:
             self._socket.close()
         except Exception:
             pass
+        self._executor.shutdown(wait=False, cancel_futures=True)
+        for t in self._threads:
+            t.join(timeout=JOIN_TIMEOUT)
+
+    def _trigger_election(self):
+        if self._stop_event.is_set():
+            return
+        with self._lock:
+            if self._election_in_progress:
+                return
+        try:
+            self._executor.submit(self.start_election)
+        except RuntimeError:
+            pass
 
     def _send(self, target_host: str, msg_type: BullyMessageType):
+        if self._stop_event.is_set():
+            return
+
         def _send_async():
+            if self._stop_event.is_set():
+                return
             data = monitor_protocol.serialize(msg_type, self.id)
             try:
                 self._socket.sendto(data, (target_host, self.port))
@@ -61,7 +87,10 @@ class BullyElection:
             except OSError as e:
                 logging.debug(f"Could not send {msg_type} to {target_host}: {e}")
 
-        threading.Thread(target=_send_async, daemon=True).start()
+        try:
+            self._executor.submit(_send_async)
+        except RuntimeError:
+            pass
 
     def _broadcast_coordinator(self):
         with self._lock:
@@ -74,6 +103,8 @@ class BullyElection:
                 self._send(peer_host, BullyMessageType.COORDINATOR)
 
     def start_election(self):
+        if self._stop_event.is_set():
+            return
         with self._lock:
             if self._election_in_progress:
                 return
@@ -88,17 +119,20 @@ class BullyElection:
             return
         for host in higher_peers:
             self._send(host, BullyMessageType.ELECTION)
-        time.sleep(ELECTION_TIMEOUT)
+        if self._stop_event.wait(ELECTION_TIMEOUT):
+            return
         with self._lock:
             received_alive = self._got_alive
         if not received_alive:
             self._broadcast_coordinator()
         else:
-            time.sleep(ELECTION_TIMEOUT)
+            if self._stop_event.wait(ELECTION_TIMEOUT):
+                return
             with self._lock:
                 self._election_in_progress = False
-                if self._leader_id is None or self._leader_id <= self.id:
-                    threading.Thread(target=self.start_election, daemon=True).start()
+                should_retry = self._leader_id is None or self._leader_id <= self.id
+            if should_retry:
+                self._trigger_election()
 
     def _handle_election(self, sender_id: int):
         if sender_id < self.id:
@@ -109,7 +143,7 @@ class BullyElection:
                 if sender_host:
                     self._send(sender_host, BullyMessageType.COORDINATOR)
             else:
-                threading.Thread(target=self.start_election, name="bully-election", daemon=True).start()
+                self._trigger_election()
 
     def _handle_alive(self, _sender_id: int):
         with self._lock:
@@ -122,7 +156,7 @@ class BullyElection:
                 self.id,
                 sender_id,
             )
-            threading.Thread(target=self.start_election, name="bully-election", daemon=True).start()
+            self._trigger_election()
             return
 
         with self._lock:
@@ -165,9 +199,9 @@ class BullyElection:
                 for peer_id, host in self.peers.items():
                     if peer_id != self.id:
                         self._send(host, BullyMessageType.COORDINATOR)
-                time.sleep(LEADER_HEARTBEAT_INTERVAL)
+                self._stop_event.wait(LEADER_HEARTBEAT_INTERVAL)
             else:
                 if elapsed > LEADER_TIMEOUT and not in_election:
                     logging.warning("Leader heartbeat timeout. Starting election...")
-                    threading.Thread(target=self.start_election, name="bully-election", daemon=True).start()
-                time.sleep(0.5)
+                    self._trigger_election()
+                self._stop_event.wait(0.5)
