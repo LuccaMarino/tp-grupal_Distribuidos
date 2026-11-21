@@ -150,9 +150,13 @@ class WordSum:
                 self._process_eof(client_id, *args)
             else:
                 logging.error(f"Discarding message with unexpected type {msg_type}")
+            ack()
         except (ValueError, TypeError, AttributeError) as e:
             logging.error(f"Discarding malformed message: {e!r}")
-        ack()
+            ack()
+        except Exception as e:
+            logging.exception(f"Error processing message: {e!r}")
+            nack()
 
     def start(self):
         try:
