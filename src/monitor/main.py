@@ -1,5 +1,6 @@
 import logging
 import os
+import signal
 import socket
 import threading
 import time
@@ -34,9 +35,15 @@ class Monitor:
         self.election = BullyElection(self.id, self.peers, ELECTION_PORT)
 
         self.stop_event = threading.Event()
+        signal.signal(signal.SIGTERM, self._handle_sigterm)
+        signal.signal(signal.SIGINT, self._handle_sigterm)
         self.ping_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.ping_socket.settimeout(PING_TIMEOUT)
         self.missed_pings: dict[str, int] = {}
+
+    def _handle_sigterm(self, signum, frame):
+        logging.info("Received SIGTERM. Stopping monitor...")
+        self.stop_event.set()
 
     def _ping_target(self, target_name: str) -> bool:
         try:
@@ -63,7 +70,7 @@ class Monitor:
                             self.missed_pings[target] = 0
             else:
                 self.missed_pings.clear()
-            time.sleep(CHECK_INTERVAL)
+            self.stop_event.wait(CHECK_INTERVAL)
 
     def start(self):
         self.election.start()

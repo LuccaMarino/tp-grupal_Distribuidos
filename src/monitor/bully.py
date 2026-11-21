@@ -3,13 +3,14 @@ import socket
 import threading
 import time
 
-from protocol import BullyMessageType, serialize, deserialize
+from protocol import BullyMessageType, deserialize, serialize
 
 LEADER_HEARTBEAT_INTERVAL = 1.0
-LEADER_TIMEOUT = 3.5
+LEADER_TIMEOUT = 5.0
 ELECTION_TIMEOUT = 1.0
 
 DEFAULT_HOST = "0.0.0.0"
+
 
 class BullyElection:
     """
@@ -51,12 +52,15 @@ class BullyElection:
             pass
 
     def _send(self, target_host: str, msg_type: BullyMessageType):
-        data = serialize(msg_type, self.id)
-        try:
-            self._socket.sendto(data, (target_host, self.port))
-            logging.debug(f"Sent {msg_type} to {target_host}")
-        except Exception as e:
-            logging.error(f"Failed to send {msg_type} to {target_host}: {e}")
+        def _send_async():
+            data = serialize(msg_type, self.id)
+            try:
+                self._socket.sendto(data, (target_host, self.port))
+                logging.debug(f"Sent {msg_type} to {target_host}")
+            except OSError as e:
+                logging.debug(f"Could not send {msg_type} to {target_host}: {e}")
+
+        threading.Thread(target=_send_async, daemon=True).start()
 
     def _broadcast_coordinator(self):
         with self._lock:
@@ -100,14 +104,29 @@ class BullyElection:
             sender_host = self.peers.get(sender_id)
             if sender_host:
                 self._send(sender_host, BullyMessageType.ALIVE)
-            threading.Thread(target=self.start_election, name="bully-election", daemon=True).start()
+            if self.is_leader():
+                if sender_host:
+                    self._send(sender_host, BullyMessageType.COORDINATOR)
+            else:
+                threading.Thread(target=self.start_election, name="bully-election", daemon=True).start()
 
     def _handle_alive(self, _sender_id: int):
         with self._lock:
             self._got_alive = True
 
     def _handle_coordinator(self, sender_id: int):
+        if sender_id < self.id:
+            logging.info(
+                "Monitor %d ignoring COORDINATOR from lower ID %d; starting election...",
+                self.id,
+                sender_id,
+            )
+            threading.Thread(target=self.start_election, name="bully-election", daemon=True).start()
+            return
+
         with self._lock:
+            if self._leader_id != sender_id:
+                logging.info("Monitor %d recognized Monitor %d as leader", self.id, sender_id)
             self._leader_id = sender_id
             self._last_leader_heartbeat = time.monotonic()
             self._election_in_progress = False
