@@ -12,11 +12,11 @@ MONITOR_ID = int(os.environ["MONITOR_ID"])
 CONTAINER_NAME = os.environ["CONTAINER_NAME"]
 PEERS_RAW = os.environ["MONITOR_PEERS"] # e.g. "0:monitor_0,1:monitor_1,2:monitor_2"
 
-HEARTBEAT_PORT = int(os.environ.get("HEARTBEAT_PORT", 9000))
-ELECTION_PORT = int(os.environ.get("ELECTION_PORT", 9001))
-CHECK_INTERVAL = float(os.environ.get("CHECK_INTERVAL", 5.0))
-PING_TIMEOUT = float(os.environ.get("PING_TIMEOUT", 2.0))
-MAX_MISSED_PINGS = int(os.environ.get("MAX_MISSED_PINGS", 3))
+HEARTBEAT_PORT = int(os.environ["HEARTBEAT_PORT"])
+ELECTION_PORT = int(os.environ["ELECTION_PORT"])
+CHECK_INTERVAL = float(os.environ["CHECK_INTERVAL"])
+PING_TIMEOUT = float(os.environ["PING_TIMEOUT"])
+MAX_MISSED_PINGS = int(os.environ["MAX_MISSED_PINGS"])
 
 def parse_peers(peers_raw):
     peers = {}
