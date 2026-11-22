@@ -74,14 +74,15 @@ def handle_client_request(connection):
             msg_type, data = message_protocol.external.recv_msg(client_socket)
             if msg_type == message_protocol.external.MsgType.WIKI_ARTICLE:
                 message_id, articles = data
-                serialized_message = connection.message_handler.serialize_article_message(articles, message_id,)
+                serialized_message = connection.message_handler.serialize_article_message(articles, message_id)
                 output_group.send(serialized_message)
                 connection.outgoing.put((message_protocol.external.MsgType.ACK, message_id))
             elif msg_type == message_protocol.external.MsgType.END_OF_RECORDS:
+                message_id = data
                 logging.info("Received end of records signal.")
-                serialized_message = connection.message_handler.serialize_eof_message(data)
+                serialized_message = connection.message_handler.serialize_eof_message(message_id)
                 output_group.broadcast(serialized_message)
-                connection.outgoing.put((message_protocol.external.MsgType.ACK, data))
+                connection.outgoing.put((message_protocol.external.MsgType.ACK, message_id))
                 return
     except socket.error:
         logging.error("The connection with the client was lost.")
@@ -169,6 +170,7 @@ def handle_client_send(connection):
     """
     Handles outgoing messages to the client. It retrieves messages from the outgoing queue and sends them to the client socket. It handles different message types, including query results and end-of-query notifications.
     """
+    outgoing_seq = 1
     try:
         while True:
             message = connection.outgoing.get()
@@ -177,9 +179,11 @@ def handle_client_send(connection):
             msg_type, data = message
             if msg_type == message_protocol.external.MsgType.QUERY_RESULT:
                 query, result = data
-                message_protocol.external.send_msg(connection.socket, msg_type, message_protocol.internal.new_message_id(), query, result,)
+                message_protocol.external.send_msg(connection.socket, msg_type, outgoing_seq, query, result)
+                outgoing_seq += 1
             elif msg_type == message_protocol.external.MsgType.END_OF_QUERY_RESULTS:
-                message_protocol.external.send_msg( connection.socket, msg_type, message_protocol.internal.new_message_id(), data,)
+                message_protocol.external.send_msg(connection.socket, msg_type, outgoing_seq, data)
+                outgoing_seq += 1
             elif msg_type == message_protocol.external.MsgType.ACK:
                 message_protocol.external.send_msg(connection.socket, msg_type, data)
             else:
