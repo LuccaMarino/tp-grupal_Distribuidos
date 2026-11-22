@@ -6,6 +6,7 @@ from common import message_protocol
 from common.heartbeat import HeartbeatResponder
 from common.middleware import GroupMember, GroupSender
 from common.middleware.middleware import MessageMiddlewareCloseError
+from common.state_storage import ClientStateStorage
 
 ID = int(os.environ["ID"])
 MOM_HOST = os.environ["MOM_HOST"]
@@ -13,6 +14,7 @@ INPUT_GROUP = os.environ["INPUT_GROUP"]
 RESULTS_GROUP = os.environ["RESULTS_GROUP"]
 GATEWAY_AMOUNT = int(os.environ["GATEWAY_AMOUNT"])
 AGGREGATOR_AMOUNT = int(os.environ["AGGREGATOR_AMOUNT"])
+STORAGE_PATH = os.environ["STORAGE_PATH"]
 
 TOP_SIZE = 20
 
@@ -35,9 +37,34 @@ class Q4Joiner:
         """
         self._input = GroupMember(MOM_HOST, INPUT_GROUP, ID)
         self._results = GroupSender(MOM_HOST, RESULTS_GROUP, GATEWAY_AMOUNT)
-        self._tops_by_client = {}    # client_id -> list of [word, total] with the top 20 words accumulated for this client
-        self._eofs_by_client = {}    # client_id -> set with the sender_id of the received EOFs
+        self._store = ClientStateStorage(STORAGE_PATH, lambda: {"tops": []})
+        self._store.load(on_recover=self._on_recover, send_fn=self._dispatch_send)
         signal.signal(signal.SIGTERM, self._handle_sigterm)
+
+    def _on_recover(self, client_id, state, eofs, pending_sends):
+        logging.info(
+            "Recovered state for client %s: top_len=%d, eofs=%d/%d, pending_sends=%d",
+            client_id,
+            len(state["tops"]),
+            len(eofs),
+            AGGREGATOR_AMOUNT,
+            len(pending_sends),
+        )
+
+    def _dispatch_send(self, client_id, item):
+        if item["type"] == "QUERY_RESULT":
+            msg = message_protocol.internal.serialize_query_result(
+                client_id, message_protocol.internal.Query.Q4, item["records"], message_id=item["message_id"]
+            )
+            self._results.send(msg)
+            return False
+        if item["type"] == "QUERY_EOF":
+            msg = message_protocol.internal.serialize_query_eof(
+                client_id, message_protocol.internal.Query.Q4, ID, message_id=item["message_id"]
+            )
+            self._results.send(msg)
+            return True
+        return False
 
     def _handle_sigterm(self, signum, frame):
         """
@@ -56,28 +83,39 @@ class Q4Joiner:
             except MessageMiddlewareCloseError as e:
                 logging.error(e)
 
-    def _process_query_result(self, client_id, query, records):
+    def _process_query_result(self, client_id, message_id, query, records):
         """
         Processes incoming query result messages by updating the global top 20 words for the specified client with the local top 20 words received from an aggregator. If the message is not of type Q4, it logs an error and discards the message.
         """
         if query != message_protocol.internal.Query.Q4:
             logging.error(f"Discarding result of unexpected query {query}")
             return
-        if client_id not in self._tops_by_client:
-            self._tops_by_client[client_id] = []
-        current_top = self._tops_by_client[client_id]
-        self._tops_by_client[client_id] = self._top_words(current_top + records)
+        if self._store.is_completed(client_id):
+            return
+        if self._store.is_duplicate_msg(client_id, message_id):
+            logging.debug(f"Duplicate message {message_id} for client {client_id}, ignoring.")
+            self._store.flush_pending(client_id, self._dispatch_send)
+            return
+        self._store.mark_msg_seen(client_id, message_id)
+        state = self._store.get_state(client_id)
+        state["tops"] = self._top_words(state["tops"] + records)
+        self._store.persist(client_id)
 
-    def _process_eof(self, client_id, sender_id):
+    def _process_eof(self, client_id, message_id, sender_id):
         """
         Processes incoming EOF messages by tracking the sender IDs for each client. If all expected EOFs have been received for a client, it triggers the flush operation to compute and send the top 20 words to the gateway.
         """
-        if client_id not in self._eofs_by_client:
-            self._eofs_by_client[client_id] = set()
-        eofs = self._eofs_by_client[client_id]
-        eofs.add(sender_id)
-        if len(eofs) == AGGREGATOR_AMOUNT:
+        if self._store.is_completed(client_id):
+            return
+        if self._store.is_duplicate_eof(client_id, sender_id):
+            logging.debug(f"Duplicate EOF from sender {sender_id} for client {client_id}, ignoring.")
+            self._store.flush_pending(client_id, self._dispatch_send)
+            return
+        eof_count = self._store.add_eof(client_id, message_id, sender_id)
+        if eof_count == AGGREGATOR_AMOUNT:
             self._flush_client(client_id)
+        else:
+            self._store.persist(client_id)
             
     def _top_words(self, candidates):
         """
@@ -90,27 +128,34 @@ class Q4Joiner:
         """
         Sends the global top 20 words for the specified client along with an EOF message to the gateway. After sending, it cleans up the state associated with that client.
         """
-        top = self._tops_by_client.pop(client_id, [])
-        self._eofs_by_client.pop(client_id)
+        top = self._store.get_state(client_id).get("tops", [])
         logging.info(f"Client {client_id} finished: sending top {len(top)}")
-        self._results.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q4, top, message_id=f"q4_join_{ID}.0"))
-        self._results.send(message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q4, ID, message_id=f"q4_join_{ID}.eof"))
+        self._store.enqueue_sends(client_id, [
+            {"type": "QUERY_RESULT", "message_id": f"q4_join_{ID}.0", "records": top},
+            {"type": "QUERY_EOF", "message_id": f"q4_join_{ID}.eof"},
+        ])
+        self._store.persist(client_id)
+        self._store.flush_pending(client_id, self._dispatch_send)
     
     def _process_message(self, message, ack, nack):
         """
         Processes incoming messages by deserializing them and determining their type. Depending on the message type (QUERY_RESULT or EOF), it calls the appropriate processing method.
         """
         try:
-            msg_type, client_id, _message_id, args = message_protocol.internal.deserialize(message)
+            msg_type, client_id, message_id, args = message_protocol.internal.deserialize(message)
             if msg_type == message_protocol.internal.MsgType.QUERY_RESULT:
-                self._process_query_result(client_id, *args)
+                self._process_query_result(client_id, message_id, *args)
             elif msg_type == message_protocol.internal.MsgType.EOF:
-                self._process_eof(client_id, *args)
+                self._process_eof(client_id, message_id, *args)
             else:
                 logging.error(f"Discarding message with unexpected type {msg_type}")
+            ack()
         except (ValueError, TypeError, AttributeError) as e:
             logging.error(f"Discarding malformed message: {e!r}")
-        ack()
+            ack()
+        except Exception as e:
+            logging.error(f"Error processing message: {e!r}")
+            nack()
 
     def start(self):
         try:
