@@ -116,7 +116,7 @@ class Q3Aggregator:
         """
         for start in range(0, len(shared_words), SHARED_BATCH_SIZE):
             batch = shared_words[start:start + SHARED_BATCH_SIZE]
-            self._results.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q3, batch))
+            self._results.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q3, batch,message_id = message_protocol.internal.new_message_id()))
         self._shared_amount_by_client[client_id] += len(shared_words)
 
     def _process_eof(self, client_id, sender_id):
@@ -142,7 +142,7 @@ class Q3Aggregator:
             self._messages_since_flush_by_client.pop(client_id)
             storage = self._storages_by_client.pop(client_id)
         shared_amount = self._shared_amount_by_client.pop(client_id, 0)
-        self._results.send(message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q3, ID))
+        self._results.send(message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q3, ID, message_id = message_protocol.internal.new_message_id()))
         if storage is not None:
             storage.delete()
         logging.info(f"Client {client_id} finished: sent {shared_amount} shared words")
@@ -152,7 +152,7 @@ class Q3Aggregator:
         Processes a message received from the input group. It deserializes the message, determines its type (DATA or EOF), and calls the appropriate processing method.
         """
         try:
-            msg_type, client_id, args = message_protocol.internal.deserialize(message)
+            msg_type, client_id, _message_id, args = message_protocol.internal.deserialize(message)
             if msg_type == message_protocol.internal.MsgType.DATA:
                 self._process_data(client_id, *args)
             elif msg_type == message_protocol.internal.MsgType.EOF:

@@ -82,7 +82,7 @@ class WordCounter:
         Processes incoming messages by deserializing them and determining their type. Depending on the message type (DATA or EOF), it calls the appropriate processing method.
         """
         try:
-            msg_type, client_id, args = message_protocol.internal.deserialize(message)
+            msg_type, client_id, _message_id, args = message_protocol.internal.deserialize(message)
             if msg_type == message_protocol.internal.MsgType.DATA:
                 self._process_data(client_id, *args)
             elif msg_type == message_protocol.internal.MsgType.EOF:

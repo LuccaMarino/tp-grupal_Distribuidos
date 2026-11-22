@@ -73,14 +73,15 @@ def handle_client_request(connection):
         while True:
             msg_type, data = message_protocol.external.recv_msg(client_socket)
             if msg_type == message_protocol.external.MsgType.WIKI_ARTICLE:
-                serialized_message = connection.message_handler.serialize_article_message(data)
+                message_id, articles = data
+                serialized_message = connection.message_handler.serialize_article_message(articles, message_id,)
                 output_group.send(serialized_message)
-                connection.outgoing.put((message_protocol.external.MsgType.ACK, None))
+                connection.outgoing.put((message_protocol.external.MsgType.ACK, message_id))
             elif msg_type == message_protocol.external.MsgType.END_OF_RECORDS:
                 logging.info("Received end of records signal.")
                 serialized_message = connection.message_handler.serialize_eof_message(data)
                 output_group.broadcast(serialized_message)
-                connection.outgoing.put((message_protocol.external.MsgType.ACK, None))
+                connection.outgoing.put((message_protocol.external.MsgType.ACK, data))
                 return
     except socket.error:
         logging.error("The connection with the client was lost.")
@@ -136,13 +137,13 @@ def handle_client_response(client_list, client_lock, consumer_controller):
                     if not deserialized_message:
                         client_index += 1
                         continue
-                    type_message, client_id, fields = deserialized_message
+                    type_message, client_id, _message_id, fields = deserialized_message
                     if type_message == message_protocol.internal.MsgType.QUERY_EOF:
                         query, sender_id = fields
                         handle_query_eof(connection.outgoing, ended_querys, client_id, query, sender_id)
                     else:
                         query, records = fields
-                        connection.outgoing.put((message_protocol.external.MsgType.QUERY_RESULT, (query, records)))
+                        connection.outgoing.put(( message_protocol.external.MsgType.QUERY_RESULT, (query, records),))
                     break
             ack()
         except socket.error:
@@ -176,8 +177,10 @@ def handle_client_send(connection):
             msg_type, data = message
             if msg_type == message_protocol.external.MsgType.QUERY_RESULT:
                 query, result = data
-                message_protocol.external.send_msg(connection.socket, msg_type, query, result)
+                message_protocol.external.send_msg(connection.socket, msg_type, message_protocol.internal.new_message_id(), query, result,)
             elif msg_type == message_protocol.external.MsgType.END_OF_QUERY_RESULTS:
+                message_protocol.external.send_msg( connection.socket, msg_type, message_protocol.internal.new_message_id(), data,)
+            elif msg_type == message_protocol.external.MsgType.ACK:
                 message_protocol.external.send_msg(connection.socket, msg_type, data)
             else:
                 message_protocol.external.send_msg(connection.socket, msg_type)

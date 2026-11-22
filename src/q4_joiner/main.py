@@ -93,15 +93,15 @@ class Q4Joiner:
         top = self._tops_by_client.pop(client_id, [])
         self._eofs_by_client.pop(client_id)
         logging.info(f"Client {client_id} finished: sending top {len(top)}")
-        self._results.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q4, top))
-        self._results.send(message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q4, ID))
+        self._results.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q4, top, message_id = message_protocol.internal.new_message_id()))
+        self._results.send(message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q4, ID, message_id = message_protocol.internal.new_message_id()))
     
     def _process_message(self, message, ack, nack):
         """
         Processes incoming messages by deserializing them and determining their type. Depending on the message type (QUERY_RESULT or EOF), it calls the appropriate processing method.
         """
         try:
-            msg_type, client_id, args = message_protocol.internal.deserialize(message)
+            msg_type, client_id, _message_id, args = message_protocol.internal.deserialize(message)
             if msg_type == message_protocol.internal.MsgType.QUERY_RESULT:
                 self._process_query_result(client_id, *args)
             elif msg_type == message_protocol.internal.MsgType.EOF:

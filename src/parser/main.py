@@ -132,13 +132,13 @@ class Parser:
         except Exception:
             logging.exception("Error processing article message")
 
-    def consume_eof(self, client_id):
+    def consume_eof(self, client_id, message_id):
         """
         Consumes an EOF message from the input group and broadcasts the EOF message to the output groups (q1, q2, abstract).
         """
-        eof_query_result = message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q1, ID)
+        eof_query_result = message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q1, ID, message_id=message_id,)
         self.q1_group.broadcast(eof_query_result)
-        eof_message = message_protocol.internal.serialize_eof(client_id, ID)
+        eof_message = message_protocol.internal.serialize_eof(client_id, ID, message_id=message_id,)
         self.q2_group.broadcast(eof_message)
         self.abstract_group.broadcast(eof_message)
         logging.info("Sent EOF message to abstract group")
@@ -148,9 +148,9 @@ class Parser:
         Consumes a message from the input group, deserializes it, and processes it based on its type (EOF or DATA). It extracts relevant fields from articles and sends the parsed data to the appropriate output groups.
         """
         try:
-            msg_type, client_id, args = message_protocol.internal.deserialize(message)
+            msg_type, client_id, message_id, args = message_protocol.internal.deserialize(message)
             if msg_type == message_protocol.internal.MsgType.EOF:
-                self.consume_eof(client_id)
+                self.consume_eof(client_id, message_id)
             elif msg_type == message_protocol.internal.MsgType.DATA:
                 if len(args) != 1 or not isinstance(args[0], list):
                     raise ValueError("Expected a list of articles in the parser input message")
@@ -162,12 +162,12 @@ class Parser:
                         raise ValueError("Expected each parser input article to be an object")
                     self.consume_article(article, q1_results, q2_results, abstract_results)
                 if q1_results:
-                    self.q1_group.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q1, q1_results))
+                    self.q1_group.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q1, q1_results, message_id=message_id,))
                 if q2_results:
                     for image_record in q2_results:
-                        self.q2_group.send(message_protocol.internal.serialize_data(client_id, [image_record]))
+                        self.q2_group.send(message_protocol.internal.serialize_data(client_id, [image_record], message_id=message_id,))
                 if abstract_results:
-                    self.abstract_group.send(message_protocol.internal.serialize_data(client_id, abstract_results))
+                    self.abstract_group.send(message_protocol.internal.serialize_data( client_id, abstract_results, message_id=message_id,))
             else:
                 raise ValueError(f"Unexpected parser input message type: {msg_type}")
             ack()

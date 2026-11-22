@@ -84,17 +84,17 @@ class ImageDownloader:
                 time.sleep(delay) 
         return False, "ERROR: HTTP max retries exceeded"
 
-    def consume_eof(self, client_id, sender):
+    def consume_eof(self, client_id, sender, message_id):
         """
         Handles the EOF message by sending a query result with the EOF flag set.
         """
         logging.info("Received EOF message")
         sender_id = f"{ID},{sender}"
-        eof_query_result = message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q2, sender_id)
+        eof_query_result = message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q2, sender_id, message_id=message_id,)
         self.output_group.broadcast(eof_query_result)
         logging.info("Sent EOF message to output group")
 
-    def consume_image(self, client_id, fields):
+    def consume_image(self, client_id, fields, message_id):
         """
         Handles the image download request by downloading the requested images and sending the downloaded images to the output group. It implements rate limiting to avoid overwhelming the server with requests. If the download is successful, it sends a query result with the downloaded images. If the download fails, it logs a warning message.
         """
@@ -108,25 +108,30 @@ class ImageDownloader:
             images.append([name, url, image_content_b64])
             time.sleep(RATE_LIMITING_DELAY)
             if len(images) >= MAX_IMAGES:
-                self.output_group.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q2, images))
+                self.output_group.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q2, images, message_id= message_protocol.internal.new_message_id(),))
                 images = []
-        self.output_group.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q2, images))
+        self.output_group.send(message_protocol.internal.serialize_query_result(
+            client_id,
+            message_protocol.internal.Query.Q2,
+            images,
+            message_id= message_protocol.internal.new_message_id(),
+        ))
 
     def consume_message(self, message, ack, nack):
         """
         Consumes a message from the input group, deserializes it, and processes it based on its type (EOF or DATA).
         """
         try:
-            msg_type, client_id, fields = message_protocol.internal.deserialize(message)
+            msg_type, client_id, message_id, fields = message_protocol.internal.deserialize(message)
             if msg_type == message_protocol.internal.MsgType.EOF:
                 sender = fields[0]
-                self.consume_eof(client_id, sender)
+                self.consume_eof(client_id, sender, message_id)
             elif msg_type == message_protocol.internal.MsgType.DATA:
                 if len(fields) != 1 or not isinstance(fields[0], list):
                     raise ValueError("Expected a list of image download records")
                 if len(fields[0]) > 1:
                     raise ValueError("Expected at most one image per download message")
-                self.consume_image(client_id, fields[0])
+                self.consume_image(client_id, fields[0], message_id)
             else:
                 raise ValueError(f"Unexpected message type for image download request: {msg_type}")
             ack()

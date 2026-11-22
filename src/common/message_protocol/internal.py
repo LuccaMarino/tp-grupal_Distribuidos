@@ -1,4 +1,9 @@
 import json
+import uuid
+
+
+def new_message_id():
+    return str(uuid.uuid4())
 
 class MsgType:
     """
@@ -9,7 +14,7 @@ class MsgType:
         EOF (int): Represents an end-of-file message indicating no more data will be sent.
         QUERY_RESULT (int): Represents a message containing the results of a query.
         QUERY_EOF (int): Represents a message indicating that all results for a query have been sent.
-    Each internal message has the form `[msg_type, client_id, ...fields specific to the message type]`.
+    Each internal message carries a unique `message_id`.
     """
     DATA = 1
     EOF = 2
@@ -34,36 +39,58 @@ def _serialize(fields):
     """
     return json.dumps(fields).encode("utf-8")
 
-def serialize_data(client_id, records):
+def serialize_data(client_id, records, message_id=None):
     """
     Serializes a data message containing records for a specific client.
     """
-    return _serialize([MsgType.DATA, client_id, records])
+    return _serialize([
+        MsgType.DATA,
+        client_id,
+        message_id or new_message_id(),
+        records,
+    ])
 
-def serialize_eof(client_id, sender_id):
+def serialize_eof(client_id, sender_id, message_id=None):
     """
     Serializes an EOF (End of File) message for a specific client, indicating that no more data will be sent from the sender identified by `sender_id`.
     The receiver can use the `sender_id` to track which senders have completed sending data.
     """
-    return _serialize([MsgType.EOF, client_id, sender_id])
+    return _serialize([
+        MsgType.EOF,
+        client_id,
+        message_id or new_message_id(),
+        sender_id,
+    ])
 
-def serialize_query_result(client_id, query, records):
+def serialize_query_result(client_id, query, records, message_id=None):
     """
     Serializes a query result message for a specific client. The message includes the query type and the associated records.
     """
-    return _serialize([MsgType.QUERY_RESULT, client_id, query, records])
+    return _serialize([
+        MsgType.QUERY_RESULT,
+        client_id,
+        message_id or new_message_id(),
+        query,
+        records,
+    ])
 
-def serialize_query_eof(client_id, query, sender_id):
+def serialize_query_eof(client_id, query, sender_id, message_id=None):
     """
     Serializes a query EOF (End of File) message for a specific client, indicating that all results for the specified query have been sent from the sender identified by `sender_id`.
     """
-    return _serialize([MsgType.QUERY_EOF, client_id, query, sender_id])
+    return _serialize([
+        MsgType.QUERY_EOF,
+        client_id,
+        message_id or new_message_id(),
+        query,
+        sender_id,
+    ])
 
 def deserialize(message):
     """
-    Deserializes a message received from the gateway. It decodes the JSON-encoded byte string and extracts the message type, client ID, and any additional arguments.
+    Deserializes a message and separates its type, client ID, message ID, and payload arguments.
     Returns:
-        tuple: A tuple containing the message type, client ID, and a list of additional arguments.
+        tuple: Message type, client ID, message ID, and payload arguments.
     """
-    [msg_type, client_id, *args] = json.loads(message.decode("utf-8"))
-    return msg_type, client_id, args
+    [msg_type, client_id, message_id, *args] = json.loads(message.decode("utf-8"))
+    return msg_type, client_id, message_id, args

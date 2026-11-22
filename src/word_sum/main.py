@@ -86,7 +86,7 @@ class WordSum:
                     languages_by_word[word] = [0, 0]
                 languages_by_word[word][language_index] = 1
 
-    def _process_data(self, client_id, records):
+    def _process_data(self, client_id, records, message_id):
         """
         Processes the data by extracting words from the abstracts, counting them, and sending the results to the appropriate aggregators. For Q3 and Q4, we only need to count unique words, so we use a set to avoid counting duplicates. For Q5, we need to count the total number of words in each abstract, so we preserve repetitions and store the length of the list of words. We also separate old articles (year <= LAST_OLD_YEAR) from new articles (year > LAST_OLD_YEAR) to send them to different consumers.
         """
@@ -109,7 +109,7 @@ class WordSum:
             languages_records = []
             for word, languages in member_languages.items():
                 languages_records.append([word, languages[0], languages[1]])
-            return message_protocol.internal.serialize_data(client_id, languages_records)
+            return message_protocol.internal.serialize_data(client_id, languages_records, message_id=message_id,)
 
         def build_totals_message(member_totals):
             """
@@ -118,21 +118,21 @@ class WordSum:
             totals_records = []
             for word, total in member_totals.items():
                 totals_records.append([word, total])
-            return message_protocol.internal.serialize_data(client_id, totals_records)
+            return message_protocol.internal.serialize_data(client_id, totals_records, message_id=message_id,)
 
         self._q3_aggregators.send_partitioned(languages_by_word, build_languages_message)
         self._q4_aggregators.send_partitioned(totals_by_word, build_totals_message)
         if old_lengths:
-            self._word_counters.send(message_protocol.internal.serialize_data(client_id, old_lengths))
+            self._word_counters.send(message_protocol.internal.serialize_data(client_id, old_lengths, message_id=message_id,))
         if new_articles:
-            self._q5_joiner.send(message_protocol.internal.serialize_data(client_id, new_articles))
+            self._q5_joiner.send(message_protocol.internal.serialize_data(client_id, new_articles, message_id=message_id,))
         
-    def _process_eof(self, client_id, parser_id):
+    def _process_eof(self, client_id, parser_id, message_id):
         """
         Processes the EOF message received from a parser and broadcasts it to all aggregators and counters. The EOF message is serialized with the client_id and a unique identifier for the parser-word_sum pair, allowing each receiver to expect an EOF for each pair.
         """
         logging.info(f"Received EOF from parser {parser_id} for client {client_id}")
-        eof_message = message_protocol.internal.serialize_eof(client_id, f"{parser_id}.{ID}")
+        eof_message = message_protocol.internal.serialize_eof(client_id, f"{parser_id}.{ID}", message_id=message_id,)
         self._q3_aggregators.broadcast(eof_message)
         self._q4_aggregators.broadcast(eof_message)
         self._word_counters.broadcast(eof_message)
@@ -143,11 +143,11 @@ class WordSum:
         Processes a message received from the input group. It deserializes the message, determines its type (DATA or EOF), and calls the appropriate processing method.
         """
         try:
-            msg_type, client_id, args = message_protocol.internal.deserialize(message)
+            msg_type, client_id, message_id, args = message_protocol.internal.deserialize(message)
             if msg_type == message_protocol.internal.MsgType.DATA:
-                self._process_data(client_id, *args)
+                self._process_data(client_id, *args, message_id=message_id)
             elif msg_type == message_protocol.internal.MsgType.EOF:
-                self._process_eof(client_id, *args)
+                self._process_eof(client_id, *args, message_id=message_id)
             else:
                 logging.error(f"Discarding message with unexpected type {msg_type}")
             ack()
