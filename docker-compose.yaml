@@ -376,6 +376,8 @@ services:
       context: ./src/
       dockerfile: word_counter/Dockerfile
     container_name: word_counter_0
+    volumes:
+      - word_counter_0_data:/data
     environment:
       ID: "0"
       MOM_HOST: "rabbitmq"
@@ -385,6 +387,7 @@ services:
       # EXPECTED_EOFS = PARSER_AMOUNT (3) * WORD_SUM_AMOUNT (3)
       EXPECTED_EOFS: 9
       SUM_PARTIAL_LENGTH: 100
+      STORAGE_PATH: "/data"
       PYTHONUNBUFFERED: "1"
     depends_on:
       rabbitmq:
@@ -399,6 +402,8 @@ services:
       context: ./src/
       dockerfile: word_counter/Dockerfile
     container_name: word_counter_1
+    volumes:
+      - word_counter_1_data:/data
     environment:
       ID: "1"
       MOM_HOST: "rabbitmq"
@@ -408,6 +413,7 @@ services:
       # EXPECTED_EOFS = PARSER_AMOUNT (3) * WORD_SUM_AMOUNT (3)
       SUM_PARTIAL_LENGTH: 100
       EXPECTED_EOFS: 9
+      STORAGE_PATH: "/data"
       PYTHONUNBUFFERED: "1"
     depends_on:
       rabbitmq:
@@ -422,6 +428,8 @@ services:
       context: ./src/
       dockerfile: word_counter/Dockerfile
     container_name: word_counter_2
+    volumes:
+      - word_counter_2_data:/data
     environment:
       ID: "2"
       MOM_HOST: "rabbitmq"
@@ -432,6 +440,7 @@ services:
       SUM_PARTIAL_LENGTH: 100
       EXPECTED_EOFS: 9
       PYTHONUNBUFFERED: "1"
+      STORAGE_PATH: "/data"
     depends_on:
       rabbitmq:
         condition: service_healthy
