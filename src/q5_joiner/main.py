@@ -4,6 +4,7 @@ import signal
 import threading
 
 from common import message_protocol
+from common.heartbeat import HeartbeatResponder
 from common.middleware import GroupMember, GroupSender
 from common.middleware.middleware import MessageMiddlewareCloseError
 
@@ -199,8 +200,13 @@ class Q5Joiner:
 def main():
     logging.basicConfig(level=logging.INFO)
     logging.info("Starting Q5 joiner service...")
+    heartbeat_responder = HeartbeatResponder()
+    heartbeat_responder.start()
     q5_joiner = Q5Joiner()
-    q5_joiner.start()
+    try:
+        q5_joiner.start()
+    finally:
+        heartbeat_responder.stop()
     return 0
 
 if __name__ == "__main__":

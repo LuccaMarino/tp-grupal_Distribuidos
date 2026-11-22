@@ -16,6 +16,15 @@ x-client-base: &client-base
   depends_on:
     - gateway
 
+x-monitor-env: &monitor-env
+  PYTHONUNBUFFERED: "1"
+  MONITOR_PEERS: "0:monitor_0,1:monitor_1,2:monitor_2"
+  HEARTBEAT_PORT: "9000"
+  ELECTION_PORT: "9001"
+  CHECK_INTERVAL: "2.0"
+  PING_TIMEOUT: "0.5"
+  MAX_MISSED_PINGS: "3"
+
 services:
   gateway:
     build:
@@ -584,6 +593,54 @@ services:
       INITIAL_DELAY_SECONDS: 20
       MIN_INTERVAL_SECONDS: 10
       MAX_INTERVAL_SECONDS: 10
+
+  monitor_0:
+    labels:
+      chaos.monkey.enabled: "true"
+      chaos.monkey.group: "monitor"
+      chaos.monkey.id: "monitor_0"
+    build:
+      context: ./src/
+      dockerfile: monitor/Dockerfile
+    container_name: monitor_0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      <<: *monitor-env
+      MONITOR_ID: "0"
+      CONTAINER_NAME: "monitor_0"
+
+  monitor_1:
+    labels:
+      chaos.monkey.enabled: "true"
+      chaos.monkey.group: "monitor"
+      chaos.monkey.id: "monitor_1"
+    build:
+      context: ./src/
+      dockerfile: monitor/Dockerfile
+    container_name: monitor_1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      <<: *monitor-env
+      MONITOR_ID: "1"
+      CONTAINER_NAME: "monitor_1"
+
+  monitor_2:
+    labels:
+      chaos.monkey.enabled: "true"
+      chaos.monkey.group: "monitor"
+      chaos.monkey.id: "monitor_2"
+    build:
+      context: ./src/
+      dockerfile: monitor/Dockerfile
+    container_name: monitor_2
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      <<: *monitor-env
+      MONITOR_ID: "2"
+      CONTAINER_NAME: "monitor_2"
 
 volumes:
   q5_joiner_new_articles:
