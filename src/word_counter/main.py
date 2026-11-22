@@ -31,6 +31,7 @@ class WordCounter:
         self._received_eofs = {} # client_id -> set of sender_ids that sent EOF
         self._seen_ids: dict[str, SequentialIdTracker] = {}
         self._out_seq: dict[str, int] = {}
+        self._pending_sends: dict[str, list[dict]] = {}
         self._completed_clients = set()
         self._load_state()
         signal.signal(signal.SIGTERM, self._handle_sigterm)
@@ -73,14 +74,18 @@ class WordCounter:
             self._received_eofs[client_id] = set(data.get("received_eofs", []))
             self._seen_ids[client_id] = SequentialIdTracker.from_dict(data.get("seen_ids", {}))
             self._out_seq[client_id] = data.get("out_seq", 0)
+            self._pending_sends[client_id] = data.get("pending_sends", [])
             logging.info(
-                "Recovered state for client %s: stats=%s, received_eofs=%s, seen_ids=%s, out_seq=%s",
+                "Recovered state for client %s: stats=%s, received_eofs=%s, seen_ids=%s, out_seq=%s, pending_sends=%d",
                 client_id,
                 self._stats[client_id],
                 self._received_eofs[client_id],
                 self._seen_ids[client_id].to_dict(),
                 self._out_seq[client_id],
+                len(self._pending_sends[client_id]),
             )
+            if self._pending_sends[client_id]:
+                self._flush_pending_sends(client_id)
 
     def _persist_client(self, client_id):
         """
@@ -93,6 +98,7 @@ class WordCounter:
             "received_eofs": list(self._received_eofs.get(client_id, [])),
             "seen_ids": self._seen_ids.get(client_id, SequentialIdTracker()).to_dict(),
             "out_seq": self._out_seq.get(client_id, 0),
+            "pending_sends": self._pending_sends.get(client_id, []),
         }
         atomic_write_json(self._client_state_path(client_id), data)
 
@@ -106,6 +112,7 @@ class WordCounter:
         self._received_eofs.pop(client_id, None)
         self._seen_ids.pop(client_id, None)
         self._out_seq.pop(client_id, None)
+        self._pending_sends.pop(client_id, None)
         state_path = self._client_state_path(client_id)
         if os.path.exists(state_path):
             try:
@@ -125,6 +132,28 @@ class WordCounter:
             self._seen_ids[client_id] = SequentialIdTracker()
         if client_id not in self._out_seq:
             self._out_seq[client_id] = 0
+        if client_id not in self._pending_sends:
+            self._pending_sends[client_id] = []
+
+    def _flush_pending_sends(self, client_id):
+        pending = self._pending_sends.get(client_id, [])
+        if not pending:
+            return
+        client_finished = False
+        while pending:
+            item = pending[0]
+            if item["type"] == "DATA":
+                msg = message_protocol.internal.serialize_data(client_id, item["records"], message_id=item["message_id"])
+                self._sum_partial_length.send(msg)
+            elif item["type"] == "EOF":
+                msg = message_protocol.internal.serialize_eof(client_id, item["sender_id"], message_id=item["message_id"])
+                self._sum_partial_length.broadcast(msg)
+                client_finished = True
+            pending.pop(0)
+            if not client_finished:
+                self._persist_client(client_id)
+        if client_finished:
+            self._mark_client_completed(client_id)
 
     def _handle_sigterm(self, signum, frame):
         """
@@ -152,6 +181,7 @@ class WordCounter:
         self._ensure_client_state(client_id)
         if self._seen_ids[client_id].contains(message_id):
             logging.debug(f"Duplicate message {message_id} for client {client_id}, ignoring.")
+            self._flush_pending_sends(client_id)
             return
         self._seen_ids[client_id].add(message_id)
         self._stats[client_id][0] += sum(records)
@@ -162,9 +192,13 @@ class WordCounter:
             out_msg_id = f"wc_{ID}.{self._out_seq[client_id]}"
             self._out_seq[client_id] += 1
             self._stats[client_id] = [0, 0]
+            self._pending_sends[client_id].append({
+                "type": "DATA",
+                "message_id": out_msg_id,
+                "records": [total_words, total_articles],
+            })
             self._persist_client(client_id)
-            data_message = message_protocol.internal.serialize_data(client_id, [total_words, total_articles], message_id=out_msg_id)
-            self._sum_partial_length.send(data_message)
+            self._flush_pending_sends(client_id)
         else:
             self._persist_client(client_id)
 
@@ -177,6 +211,7 @@ class WordCounter:
         self._ensure_client_state(client_id)
         if sender_id in self._received_eofs[client_id]:
             logging.debug(f"Duplicate EOF from sender {sender_id} for client {client_id}, ignoring.")
+            self._flush_pending_sends(client_id)
             return
 
         logging.info(f"Received EOF from sender {sender_id} for client {client_id}")
@@ -189,12 +224,20 @@ class WordCounter:
             final_eof_id = f"wc_{ID}.eof"
             self._out_seq[client_id] += 1
             self._stats[client_id] = [0, 0]
+            self._pending_sends[client_id].extend([
+                {
+                    "type": "DATA",
+                    "message_id": final_data_id,
+                    "records": [total_words, total_articles],
+                },
+                {
+                    "type": "EOF",
+                    "message_id": final_eof_id,
+                    "sender_id": f"word_counter_{ID}",
+                },
+            ])
             self._persist_client(client_id)
-            data_message = message_protocol.internal.serialize_data(client_id, [total_words, total_articles], message_id=final_data_id)
-            self._sum_partial_length.send(data_message)
-            eof_message = message_protocol.internal.serialize_eof(client_id, f"word_counter_{ID}", message_id=final_eof_id)
-            self._sum_partial_length.broadcast(eof_message)
-            self._mark_client_completed(client_id)
+            self._flush_pending_sends(client_id)
         else:
             self._persist_client(client_id)
 
