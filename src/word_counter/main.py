@@ -6,7 +6,7 @@ from common import message_protocol
 from common.heartbeat import HeartbeatResponder
 from common.middleware import GroupMember, GroupSender
 from common.middleware.middleware import MessageMiddlewareCloseError
-from common.state_storage import SequentialIdTracker, atomic_write_json, read_json
+from common.state_storage import ClientStateStorage
 
 ID = int(os.environ["ID"])
 MOM_HOST = os.environ["MOM_HOST"]
@@ -27,133 +27,30 @@ class WordCounter:
         """
         self._input = GroupMember(MOM_HOST, INPUT_GROUP, ID)
         self._sum_partial_length = GroupSender(MOM_HOST, SUM_PARTIAL_LENGTH_GROUP, Q5_JOINER_AMOUNT)
-        self._stats = {} # client_id -> [total_words, total_articles]
-        self._received_eofs = {} # client_id -> set of sender_ids that sent EOF
-        self._seen_ids: dict[str, SequentialIdTracker] = {}
-        self._out_seq: dict[str, int] = {}
-        self._pending_sends: dict[str, list[dict]] = {}
-        self._completed_clients = set()
-        self._load_state()
+        self._store = ClientStateStorage(STORAGE_PATH, lambda: {"stats": [0, 0], "out_seq": 0})
+        self._store.load(on_recover=self._on_recover, send_fn=self._dispatch_send)
         signal.signal(signal.SIGTERM, self._handle_sigterm)
 
-    def _client_state_path(self, client_id):
-        """
-        Returns the file path for storing the state of a specific client.
-        """
-        return os.path.join(STORAGE_PATH, f"client_{client_id}.json")
+    def _on_recover(self, client_id, state, eofs, pending):
+        logging.info(
+            "Recovered state for client %s: stats=%s, received_eofs=%s, out_seq=%s, pending_sends=%d",
+            client_id,
+            state["stats"],
+            eofs,
+            state["out_seq"],
+            len(pending),
+        )
 
-    def _completed_path(self):
-        """
-        Returns the file path for storing the list of completed clients.
-        """
-        return os.path.join(STORAGE_PATH, "completed_clients.json")
-
-    def _load_state(self):
-        """
-        Loads the state of the word counter from disk, recovering statistics, received EOFs, seen message IDs, and output sequence numbers for each client. It also removes state files for clients that have already completed processing.
-        """
-        os.makedirs(STORAGE_PATH, exist_ok=True)
-        completed = read_json(self._completed_path(), default=[])
-        self._completed_clients = set(completed)
-
-        for filename in os.listdir(STORAGE_PATH):
-            if not filename.startswith("client_") or not filename.endswith(".json"):
-                continue
-            filepath = os.path.join(STORAGE_PATH, filename)
-            data = read_json(filepath)
-            if not data:
-                continue
-            client_id = data["client_id"]
-            if client_id in self._completed_clients:
-                try:
-                    os.remove(filepath)
-                except OSError:
-                    pass
-                continue
-            self._stats[client_id] = data.get("stats", [0, 0])
-            self._received_eofs[client_id] = set(data.get("received_eofs", []))
-            self._seen_ids[client_id] = SequentialIdTracker.from_dict(data.get("seen_ids", {}))
-            self._out_seq[client_id] = data.get("out_seq", 0)
-            self._pending_sends[client_id] = data.get("pending_sends", [])
-            logging.info(
-                "Recovered state for client %s: stats=%s, received_eofs=%s, seen_ids=%s, out_seq=%s, pending_sends=%d",
-                client_id,
-                self._stats[client_id],
-                self._received_eofs[client_id],
-                self._seen_ids[client_id].to_dict(),
-                self._out_seq[client_id],
-                len(self._pending_sends[client_id]),
-            )
-            if self._pending_sends[client_id]:
-                self._flush_pending_sends(client_id)
-
-    def _persist_client(self, client_id):
-        """
-        Persists the state of a specific client to disk, including statistics, received EOFs, seen message IDs, and output sequence numbers.
-        """
-        self._ensure_client_state(client_id)
-        data = {
-            "client_id": client_id,
-            "stats": self._stats.get(client_id, [0, 0]),
-            "received_eofs": list(self._received_eofs.get(client_id, [])),
-            "seen_ids": self._seen_ids.get(client_id, SequentialIdTracker()).to_dict(),
-            "out_seq": self._out_seq.get(client_id, 0),
-            "pending_sends": self._pending_sends.get(client_id, []),
-        }
-        atomic_write_json(self._client_state_path(client_id), data)
-
-    def _mark_client_completed(self, client_id):
-        """
-        Marks a client as completed by adding it to the completed clients set, persisting the updated list to disk, and removing any associated state files for that client.
-        """
-        self._completed_clients.add(client_id)
-        atomic_write_json(self._completed_path(), sorted(self._completed_clients))
-        self._stats.pop(client_id, None)
-        self._received_eofs.pop(client_id, None)
-        self._seen_ids.pop(client_id, None)
-        self._out_seq.pop(client_id, None)
-        self._pending_sends.pop(client_id, None)
-        state_path = self._client_state_path(client_id)
-        if os.path.exists(state_path):
-            try:
-                os.remove(state_path)
-            except OSError:
-                pass
-
-    def _ensure_client_state(self, client_id):
-        """
-        Ensures that the state for a specific client is initialized, creating default entries for statistics, received EOFs, seen message IDs, and output sequence numbers if they do not already exist.
-        """
-        if client_id not in self._stats:
-            self._stats[client_id] = [0, 0]
-        if client_id not in self._received_eofs:
-            self._received_eofs[client_id] = set()
-        if client_id not in self._seen_ids:
-            self._seen_ids[client_id] = SequentialIdTracker()
-        if client_id not in self._out_seq:
-            self._out_seq[client_id] = 0
-        if client_id not in self._pending_sends:
-            self._pending_sends[client_id] = []
-
-    def _flush_pending_sends(self, client_id):
-        pending = self._pending_sends.get(client_id, [])
-        if not pending:
-            return
-        client_finished = False
-        while pending:
-            item = pending[0]
-            if item["type"] == "DATA":
-                msg = message_protocol.internal.serialize_data(client_id, item["records"], message_id=item["message_id"])
-                self._sum_partial_length.send(msg)
-            elif item["type"] == "EOF":
-                msg = message_protocol.internal.serialize_eof(client_id, item["sender_id"], message_id=item["message_id"])
-                self._sum_partial_length.broadcast(msg)
-                client_finished = True
-            pending.pop(0)
-            if not client_finished:
-                self._persist_client(client_id)
-        if client_finished:
-            self._mark_client_completed(client_id)
+    def _dispatch_send(self, client_id, item):
+        if item["type"] == "DATA":
+            msg = message_protocol.internal.serialize_data(client_id, item["records"], message_id=item["message_id"])
+            self._sum_partial_length.send(msg)
+            return False
+        if item["type"] == "EOF":
+            msg = message_protocol.internal.serialize_eof(client_id, item["sender_id"], message_id=item["message_id"])
+            self._sum_partial_length.broadcast(msg)
+            return True
+        return False
 
     def _handle_sigterm(self, signum, frame):
         """
@@ -176,55 +73,54 @@ class WordCounter:
         """
         Processes incoming data messages by updating the total words and total articles for the specified client. If the accumulated articles reach the SUM_PARTIAL_LENGTH threshold, it sends the partial sums to the joiner and resets the counters for that client.
         """
-        if client_id in self._completed_clients:
+        if self._store.is_completed(client_id):
             return
-        self._ensure_client_state(client_id)
-        if self._seen_ids[client_id].contains(message_id):
+        if self._store.is_duplicate_msg(client_id, message_id):
             logging.debug(f"Duplicate message {message_id} for client {client_id}, ignoring.")
-            self._flush_pending_sends(client_id)
+            self._store.flush_pending(client_id, self._dispatch_send)
             return
-        self._seen_ids[client_id].add(message_id)
-        self._stats[client_id][0] += sum(records)
-        self._stats[client_id][1] += len(records)
+        self._store.mark_msg_seen(client_id, message_id)
+        state = self._store.get_state(client_id)
+        state["stats"][0] += sum(records)
+        state["stats"][1] += len(records)
 
-        if self._stats[client_id][1] >= SUM_PARTIAL_LENGTH:
-            total_words, total_articles = self._stats[client_id]
-            out_msg_id = f"wc_{ID}.{self._out_seq[client_id]}"
-            self._out_seq[client_id] += 1
-            self._stats[client_id] = [0, 0]
-            self._pending_sends[client_id].append({
+        if state["stats"][1] >= SUM_PARTIAL_LENGTH:
+            total_words, total_articles = state["stats"]
+            out_msg_id = f"wc_{ID}.{state['out_seq']}"
+            state["out_seq"] += 1
+            state["stats"] = [0, 0]
+            self._store.enqueue_sends(client_id, [{
                 "type": "DATA",
                 "message_id": out_msg_id,
                 "records": [total_words, total_articles],
-            })
-            self._persist_client(client_id)
-            self._flush_pending_sends(client_id)
+            }])
+            self._store.persist(client_id)
+            self._store.flush_pending(client_id, self._dispatch_send)
         else:
-            self._persist_client(client_id)
+            self._store.persist(client_id)
 
     def _process_eof(self, client_id, message_id, sender_id):
         """
         Processes incoming EOF messages by tracking the sender IDs for each client. If all expected EOFs have been received for a client, it sends any remaining totals to the joiner and broadcasts an EOF message to indicate the end of results for that client.
         """
-        if client_id in self._completed_clients:
+        if self._store.is_completed(client_id):
             return
-        self._ensure_client_state(client_id)
-        if sender_id in self._received_eofs[client_id]:
+        if self._store.is_duplicate_eof(client_id, sender_id):
             logging.debug(f"Duplicate EOF from sender {sender_id} for client {client_id}, ignoring.")
-            self._flush_pending_sends(client_id)
+            self._store.flush_pending(client_id, self._dispatch_send)
             return
 
         logging.info(f"Received EOF from sender {sender_id} for client {client_id}")
-        self._seen_ids[client_id].add(message_id)
-        self._received_eofs[client_id].add(sender_id)
-        
-        if len(self._received_eofs[client_id]) == EXPECTED_EOFS:
-            total_words, total_articles = self._stats.get(client_id, [0, 0])
-            final_data_id = f"wc_{ID}.{self._out_seq[client_id]}"
+        eof_count = self._store.add_eof(client_id, message_id, sender_id)
+
+        if eof_count == EXPECTED_EOFS:
+            state = self._store.get_state(client_id)
+            total_words, total_articles = state["stats"]
+            final_data_id = f"wc_{ID}.{state['out_seq']}"
             final_eof_id = f"wc_{ID}.eof"
-            self._out_seq[client_id] += 1
-            self._stats[client_id] = [0, 0]
-            self._pending_sends[client_id].extend([
+            state["out_seq"] += 1
+            state["stats"] = [0, 0]
+            self._store.enqueue_sends(client_id, [
                 {
                     "type": "DATA",
                     "message_id": final_data_id,
@@ -236,10 +132,10 @@ class WordCounter:
                     "sender_id": f"word_counter_{ID}",
                 },
             ])
-            self._persist_client(client_id)
-            self._flush_pending_sends(client_id)
+            self._store.persist(client_id)
+            self._store.flush_pending(client_id, self._dispatch_send)
         else:
-            self._persist_client(client_id)
+            self._store.persist(client_id)
 
     def _process_message(self, message, ack, nack):
         """
