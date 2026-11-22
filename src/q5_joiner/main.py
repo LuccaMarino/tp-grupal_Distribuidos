@@ -130,14 +130,14 @@ class Q5Joiner:
                     if length > old_articles_average:
                         batch.append([url, length])
                         if len(batch) >= BATCH_SIZE:
-                            result_message = message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q5, batch)
+                            result_message = message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q5, batch, message_id = message_protocol.internal.new_message_id())
                             self._results_sender.send(result_message)
                             batch = []
                 if batch:
-                    result_message = message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q5, batch)
+                    result_message = message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q5, batch, message_id = message_protocol.internal.new_message_id())
                     self._results_sender.send(result_message)
             os.remove(file_path)
-        eof_message = message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q5, ID)
+        eof_message = message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q5, ID, message_id = message_protocol.internal.new_message_id())
         self._results_sender.broadcast(eof_message)
         self._global_stats.pop(client_id, None)
         self._received_word_sum_eofs.pop(client_id, None)
@@ -148,7 +148,7 @@ class Q5Joiner:
         Processes incoming messages for new articles by deserializing them and determining their type. Depending on the message type (DATA or EOF), it calls the appropriate processing method.
         """
         try:
-            msg_type, client_id, args = message_protocol.internal.deserialize(message)
+            msg_type, client_id, _message_id, args = message_protocol.internal.deserialize(message)
             if msg_type == message_protocol.internal.MsgType.DATA:
                 self._process_new_articles(client_id, *args)
             elif msg_type == message_protocol.internal.MsgType.EOF:
@@ -164,7 +164,7 @@ class Q5Joiner:
         Processes incoming messages for sum partial length by deserializing them and determining their type. Depending on the message type (DATA or EOF), it calls the appropriate processing method.
         """
         try:
-            msg_type, client_id, args = message_protocol.internal.deserialize(message)
+            msg_type, client_id, _message_id, args = message_protocol.internal.deserialize(message)
             if msg_type == message_protocol.internal.MsgType.DATA:
                 self._process_sum_partial_length(client_id, *args)
             elif msg_type == message_protocol.internal.MsgType.EOF:

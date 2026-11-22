@@ -131,8 +131,8 @@ class Q4Aggregator:
             self._buffers_by_client.pop(client_id)
             storage = self._storages_by_client.pop(client_id)
             top = self._top_words(storage)
-        self._joiner.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q4, top))
-        self._joiner.send(message_protocol.internal.serialize_eof(client_id, ID))
+        self._joiner.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q4, top, message_id = message_protocol.internal.new_message_id()))
+        self._joiner.send(message_protocol.internal.serialize_eof(client_id, ID, message_id = message_protocol.internal.new_message_id()))
         if storage is not None:
             storage.delete()
         logging.info(f"Client {client_id} finished: sent top {len(top)}")
@@ -142,7 +142,7 @@ class Q4Aggregator:
         Processes incoming messages by deserializing them and determining their type. Depending on the message type (DATA or EOF), it calls the appropriate processing method.
         """
         try:
-            msg_type, client_id, args = message_protocol.internal.deserialize(message)
+            msg_type, client_id, _message_id, args = message_protocol.internal.deserialize(message)
             if msg_type == message_protocol.internal.MsgType.DATA:
                 self._process_data(client_id, *args)
             elif msg_type == message_protocol.internal.MsgType.EOF:

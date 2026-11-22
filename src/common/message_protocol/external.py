@@ -2,6 +2,8 @@ from asyncio import IncompleteReadError
 from datetime import datetime
 from . import external_serializer
 import json
+
+
 class MsgType:
     """
     Enum-like class for message types.
@@ -31,10 +33,11 @@ def _recv_sized(socket, size: int) -> bytes:
         pos += n
     return bytes(buf)
 
-def _recv_wiki_articles(socket) -> dict:
+def _recv_wiki_articles(socket) -> tuple:
     """
-    Receive a WIKI_ARTICLE message from the socket and deserialize it into a dictionary containing the articles' details. The dictionary includes the following keys: `name`, `abstract`, `lang`, `url`, `sections`, and `date_modified`.
+    Receive a WIKI_ARTICLE message and return its message ID and article records.
     """
+    message_id = external_serializer.deserialize_string(socket, _recv_sized)
     count = external_serializer.deserialize_uint32(_recv_sized(socket, external_serializer.UINT32_SIZE))
     articles = []
     for _ in range(count):
@@ -55,31 +58,32 @@ def _recv_wiki_articles(socket) -> dict:
             "image": image,
             "date_modified": date_modified,
         })
-    return articles
+    return message_id, articles
 
-def _recv_empty(socket):
-    """
-    Receive an empty message from the socket. It's used for message types that do not carry any additional data, such as `END_OF_RECORDS` and `ACK`. It simply returns `None`.
-    """
-    return None
+def _recv_id(socket):
+    return external_serializer.deserialize_string(socket, _recv_sized)
+
 
 def _recv_query_result(sock):
+    message_id = external_serializer.deserialize_string(sock, _recv_sized)
     query = external_serializer.deserialize_uint32(
         _recv_sized(sock, external_serializer.UINT32_SIZE)
     )
     result_json = external_serializer.deserialize_string(sock, _recv_sized)
-    return query, json.loads(result_json)
+    return message_id, query, json.loads(result_json)
 
 
 def _recv_end_of_query_results(socket):
-    return external_serializer.deserialize_uint32(
+    message_id = external_serializer.deserialize_string(socket, _recv_sized)
+    query = external_serializer.deserialize_uint32(
         _recv_sized(socket, external_serializer.UINT32_SIZE)
     )
+    return message_id, query
 
 RECV_MSG_HANDLERS = {
     MsgType.WIKI_ARTICLE: _recv_wiki_articles,
-    MsgType.END_OF_RECORDS: _recv_empty,
-    MsgType.ACK: _recv_empty,
+    MsgType.END_OF_RECORDS: _recv_id,
+    MsgType.ACK: _recv_id,
     MsgType.QUERY_RESULT: _recv_query_result,
     MsgType.END_OF_QUERY_RESULTS: _recv_end_of_query_results
 }
@@ -138,36 +142,52 @@ def _serialize_wiki_article(article: dict) -> bytes:
         external_serializer.serialize_uint64(date_modified),
     ])
 
-def _send_wiki_articles(socket, articles):
+def _send_wiki_articles(socket, message_id, articles):
     """
     Send a WIKI_ARTICLE message to the socket. The articles are serialized into bytes and sent along with the message type.
     """
     if isinstance(articles, dict):
         articles = [articles]
     msg = external_serializer.serialize_uint32(MsgType.WIKI_ARTICLE)
+    msg += external_serializer.serialize_string(message_id)
     msg += _serialize_wiki_article_batch(articles)
     socket.sendall(msg)
 
-def _send_end_of_records(socket):
+def _send_end_of_records(socket, message_id):
     """
     Send an END_OF_RECORDS message to the socket. This message indicates that there are no more records to be sent.
     """
-    socket.sendall(external_serializer.serialize_uint32(MsgType.END_OF_RECORDS))
+    socket.sendall(
+        external_serializer.serialize_uint32(MsgType.END_OF_RECORDS)
+        + external_serializer.serialize_string(message_id)
+    )
 
-def _send_ack(socket):
+def _send_ack(socket, message_id):
     """
     Send an ACK message to the socket. This message is used to acknowledge receipt of a previous message.
     """
-    socket.sendall(external_serializer.serialize_uint32(MsgType.ACK))
+    socket.sendall(
+        external_serializer.serialize_uint32(MsgType.ACK)
+        + external_serializer.serialize_string(message_id)
+    )
 
-def _send_query_result(sock, query, result):
+def _send_query_result(sock, message_id, query, result):
     query_bytes = external_serializer.serialize_uint32(query)
     result_json = json.dumps(result, ensure_ascii=False)
     result_bytes = external_serializer.serialize_string(result_json)
-    sock.sendall( external_serializer.serialize_uint32(MsgType.QUERY_RESULT) + query_bytes + result_bytes)
+    sock.sendall(
+        external_serializer.serialize_uint32(MsgType.QUERY_RESULT)
+        + external_serializer.serialize_string(message_id)
+        + query_bytes
+        + result_bytes
+    )
 
-def _send_end_of_query_results(sock, query):
-    sock.sendall(external_serializer.serialize_uint32(MsgType.END_OF_QUERY_RESULTS) + external_serializer.serialize_uint32(query))
+def _send_end_of_query_results(sock, message_id, query):
+    sock.sendall(
+        external_serializer.serialize_uint32(MsgType.END_OF_QUERY_RESULTS)
+        + external_serializer.serialize_string(message_id)
+        + external_serializer.serialize_uint32(query)
+    )
 
 SEND_MSG_HANDLERS = {
     MsgType.WIKI_ARTICLE: _send_wiki_articles,

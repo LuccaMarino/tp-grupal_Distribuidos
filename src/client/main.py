@@ -109,11 +109,12 @@ class Client:
                 if msg_type == message_protocol.external.MsgType.ACK:
                     ack_count += 1
                 elif msg_type == message_protocol.external.MsgType.QUERY_RESULT:
-                    query, result = data
+                    _, query, result = data
                     self.write_query_result(query, result)
                 elif msg_type == message_protocol.external.MsgType.END_OF_QUERY_RESULTS:
-                    self.finished_queries.add(data)
-                    logging.info(f"Finished query: {data}")
+                    _, query = data
+                    self.finished_queries.add(query)
+                    logging.info(f"Finished query: {query}")
                     if len(self.finished_queries) == 5:
                         logging.info("All queries finished.")
                         break
@@ -141,9 +142,11 @@ class Client:
             sent_count = 0
             for batch in parquet_file.iter_batches(batch_size=BATCH_SIZE):
                 article_list = batch.to_pylist()
+                message_id = message_protocol.internal.new_message_id()
                 message_protocol.external.send_msg(
                     self.server_socket,
                     message_protocol.external.MsgType.WIKI_ARTICLE,
+                    message_id,
                     article_list
                 )
                 sent_count += len(article_list)
@@ -151,7 +154,8 @@ class Client:
                     print(f"{filename}: {sent_count} / {total_articles} articles sent to gateway.")
         message_protocol.external.send_msg(
             self.server_socket,
-            message_protocol.external.MsgType.END_OF_RECORDS
+            message_protocol.external.MsgType.END_OF_RECORDS,
+            message_protocol.internal.new_message_id()
         )
         logging.info("All articles sent. Waiting for final acknowledgment...")
 
