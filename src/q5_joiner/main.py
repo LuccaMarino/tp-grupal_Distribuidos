@@ -124,20 +124,22 @@ class Q5Joiner:
         if os.path.exists(file_path):
             with open(file_path, "r") as f:
                 batch = []
+                batch_idx = 0
                 for line in f:
                     url, length_str = line.strip().split("\t")
                     length = int(length_str)
                     if length > old_articles_average:
                         batch.append([url, length])
                         if len(batch) >= BATCH_SIZE:
-                            result_message = message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q5, batch, message_id = message_protocol.internal.new_message_id())
+                            result_message = message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q5, batch, message_id=f"q5_join_{ID}.{batch_idx}")
                             self._results_sender.send(result_message)
                             batch = []
+                            batch_idx += 1
                 if batch:
-                    result_message = message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q5, batch, message_id = message_protocol.internal.new_message_id())
+                    result_message = message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q5, batch, message_id=f"q5_join_{ID}.{batch_idx}")
                     self._results_sender.send(result_message)
             os.remove(file_path)
-        eof_message = message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q5, ID, message_id = message_protocol.internal.new_message_id())
+        eof_message = message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q5, ID, message_id=f"q5_join_{ID}.eof")
         self._results_sender.broadcast(eof_message)
         self._global_stats.pop(client_id, None)
         self._received_word_sum_eofs.pop(client_id, None)

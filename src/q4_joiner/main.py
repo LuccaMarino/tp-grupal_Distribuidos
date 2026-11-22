@@ -93,8 +93,8 @@ class Q4Joiner:
         top = self._tops_by_client.pop(client_id, [])
         self._eofs_by_client.pop(client_id)
         logging.info(f"Client {client_id} finished: sending top {len(top)}")
-        self._results.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q4, top, message_id = message_protocol.internal.new_message_id()))
-        self._results.send(message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q4, ID, message_id = message_protocol.internal.new_message_id()))
+        self._results.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q4, top, message_id=f"q4_join_{ID}.0"))
+        self._results.send(message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q4, ID, message_id=f"q4_join_{ID}.eof"))
     
     def _process_message(self, message, ack, nack):
         """

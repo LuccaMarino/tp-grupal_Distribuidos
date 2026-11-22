@@ -114,9 +114,10 @@ class Q3Aggregator:
         """
         Sends the shared words to the results group in batches of SHARED_BATCH_SIZE. Each batch is serialized as a query result message with the client_id and the query type (Q3). The total number of shared words sent for the client is updated accordingly.
         """
-        for start in range(0, len(shared_words), SHARED_BATCH_SIZE):
+        base_idx = self._shared_amount_by_client[client_id] // SHARED_BATCH_SIZE
+        for idx, start in enumerate(range(0, len(shared_words), SHARED_BATCH_SIZE)):
             batch = shared_words[start:start + SHARED_BATCH_SIZE]
-            self._results.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q3, batch,message_id = message_protocol.internal.new_message_id()))
+            self._results.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q3, batch, message_id=f"q3_agg_{ID}.{base_idx + idx}"))
         self._shared_amount_by_client[client_id] += len(shared_words)
 
     def _process_eof(self, client_id, sender_id):
@@ -142,7 +143,7 @@ class Q3Aggregator:
             self._messages_since_flush_by_client.pop(client_id)
             storage = self._storages_by_client.pop(client_id)
         shared_amount = self._shared_amount_by_client.pop(client_id, 0)
-        self._results.send(message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q3, ID, message_id = message_protocol.internal.new_message_id()))
+        self._results.send(message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q3, ID, message_id=f"q3_agg_{ID}.eof"))
         if storage is not None:
             storage.delete()
         logging.info(f"Client {client_id} finished: sent {shared_amount} shared words")

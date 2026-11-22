@@ -657,3 +657,6 @@ volumes:
   q3_aggregator_1_data:
   q4_aggregator_0_data:
   q4_aggregator_1_data:
+  word_counter_0_data:
+  word_counter_1_data:
+  word_counter_2_data:
