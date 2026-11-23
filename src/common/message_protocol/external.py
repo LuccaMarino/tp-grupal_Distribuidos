@@ -37,7 +37,9 @@ def _recv_wiki_articles(socket) -> tuple:
     """
     Receive a WIKI_ARTICLE message and return its message ID and article records.
     """
-    message_id = external_serializer.deserialize_string(socket, _recv_sized)
+    message_id = external_serializer.deserialize_uint64(
+        _recv_sized(socket, external_serializer.UINT64_SIZE)
+    )
     count = external_serializer.deserialize_uint32(_recv_sized(socket, external_serializer.UINT32_SIZE))
     articles = []
     for _ in range(count):
@@ -60,21 +62,25 @@ def _recv_wiki_articles(socket) -> tuple:
         })
     return message_id, articles
 
-def _recv_id(socket):
-    return external_serializer.deserialize_string(socket, _recv_sized)
-
+def _recv_id(socket) -> int:
+    return external_serializer.deserialize_uint64(
+        _recv_sized(socket, external_serializer.UINT64_SIZE)
+    )
 
 def _recv_query_result(sock):
-    message_id = external_serializer.deserialize_string(sock, _recv_sized)
+    message_id = external_serializer.deserialize_uint64(
+        _recv_sized(sock, external_serializer.UINT64_SIZE)
+    )
     query = external_serializer.deserialize_uint32(
         _recv_sized(sock, external_serializer.UINT32_SIZE)
     )
     result_json = external_serializer.deserialize_string(sock, _recv_sized)
     return message_id, query, json.loads(result_json)
 
-
 def _recv_end_of_query_results(socket):
-    message_id = external_serializer.deserialize_string(socket, _recv_sized)
+    message_id = external_serializer.deserialize_uint64(
+        _recv_sized(socket, external_serializer.UINT64_SIZE)
+    )
     query = external_serializer.deserialize_uint32(
         _recv_sized(socket, external_serializer.UINT32_SIZE)
     )
@@ -149,7 +155,7 @@ def _send_wiki_articles(socket, message_id, articles):
     if isinstance(articles, dict):
         articles = [articles]
     msg = external_serializer.serialize_uint32(MsgType.WIKI_ARTICLE)
-    msg += external_serializer.serialize_string(message_id)
+    msg += external_serializer.serialize_uint64(message_id)
     msg += _serialize_wiki_article_batch(articles)
     socket.sendall(msg)
 
@@ -159,7 +165,7 @@ def _send_end_of_records(socket, message_id):
     """
     socket.sendall(
         external_serializer.serialize_uint32(MsgType.END_OF_RECORDS)
-        + external_serializer.serialize_string(message_id)
+        + external_serializer.serialize_uint64(message_id)
     )
 
 def _send_ack(socket, message_id):
@@ -168,7 +174,7 @@ def _send_ack(socket, message_id):
     """
     socket.sendall(
         external_serializer.serialize_uint32(MsgType.ACK)
-        + external_serializer.serialize_string(message_id)
+        + external_serializer.serialize_uint64(message_id)
     )
 
 def _send_query_result(sock, message_id, query, result):
@@ -177,7 +183,7 @@ def _send_query_result(sock, message_id, query, result):
     result_bytes = external_serializer.serialize_string(result_json)
     sock.sendall(
         external_serializer.serialize_uint32(MsgType.QUERY_RESULT)
-        + external_serializer.serialize_string(message_id)
+        + external_serializer.serialize_uint64(message_id)
         + query_bytes
         + result_bytes
     )
@@ -185,7 +191,7 @@ def _send_query_result(sock, message_id, query, result):
 def _send_end_of_query_results(sock, message_id, query):
     sock.sendall(
         external_serializer.serialize_uint32(MsgType.END_OF_QUERY_RESULTS)
-        + external_serializer.serialize_string(message_id)
+        + external_serializer.serialize_uint64(message_id)
         + external_serializer.serialize_uint32(query)
     )
 

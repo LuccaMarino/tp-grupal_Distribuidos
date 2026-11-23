@@ -164,10 +164,10 @@ class Parser:
                 if q1_results:
                     self.q1_group.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q1, q1_results, message_id=message_id,))
                 if q2_results:
-                    for image_record in q2_results:
-                        self.q2_group.send(message_protocol.internal.serialize_data(client_id, [image_record], message_id=message_id,))
+                    for idx, image_record in enumerate(q2_results):
+                        self.q2_group.send(message_protocol.internal.serialize_data(client_id, [image_record], message_id=f"{message_id}.{idx}",))
                 if abstract_results:
-                    self.abstract_group.send(message_protocol.internal.serialize_data( client_id, abstract_results, message_id=message_id,))
+                    self.abstract_group.send(message_protocol.internal.serialize_data(client_id, abstract_results, message_id=message_id,))
             else:
                 raise ValueError(f"Unexpected parser input message type: {msg_type}")
             ack()

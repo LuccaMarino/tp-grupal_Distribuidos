@@ -1,9 +1,4 @@
 import json
-import uuid
-
-
-def new_message_id():
-    return str(uuid.uuid4())
 
 class MsgType:
     """
@@ -39,18 +34,18 @@ def _serialize(fields):
     """
     return json.dumps(fields).encode("utf-8")
 
-def serialize_data(client_id, records, message_id=None):
+def serialize_data(client_id, records, message_id=0):
     """
     Serializes a data message containing records for a specific client.
     """
     return _serialize([
         MsgType.DATA,
         client_id,
-        message_id or new_message_id(),
+        message_id,
         records,
     ])
 
-def serialize_eof(client_id, sender_id, message_id=None):
+def serialize_eof(client_id, sender_id, message_id=0):
     """
     Serializes an EOF (End of File) message for a specific client, indicating that no more data will be sent from the sender identified by `sender_id`.
     The receiver can use the `sender_id` to track which senders have completed sending data.
@@ -58,30 +53,30 @@ def serialize_eof(client_id, sender_id, message_id=None):
     return _serialize([
         MsgType.EOF,
         client_id,
-        message_id or new_message_id(),
+        message_id,
         sender_id,
     ])
 
-def serialize_query_result(client_id, query, records, message_id=None):
+def serialize_query_result(client_id, query, records, message_id=0):
     """
     Serializes a query result message for a specific client. The message includes the query type and the associated records.
     """
     return _serialize([
         MsgType.QUERY_RESULT,
         client_id,
-        message_id or new_message_id(),
+        message_id,
         query,
         records,
     ])
 
-def serialize_query_eof(client_id, query, sender_id, message_id=None):
+def serialize_query_eof(client_id, query, sender_id, message_id=0):
     """
     Serializes a query EOF (End of File) message for a specific client, indicating that all results for the specified query have been sent from the sender identified by `sender_id`.
     """
     return _serialize([
         MsgType.QUERY_EOF,
         client_id,
-        message_id or new_message_id(),
+        message_id,
         query,
         sender_id,
     ])

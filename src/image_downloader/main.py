@@ -99,6 +99,7 @@ class ImageDownloader:
         Handles the image download request by downloading the requested images and sending the downloaded images to the output group. It implements rate limiting to avoid overwhelming the server with requests. If the download is successful, it sends a query result with the downloaded images. If the download fails, it logs a warning message.
         """
         images = []
+        batch_idx = 0
         for [name, url, image_url] in fields:
             success, image_content = self.download_image(image_url)
             if success:
@@ -108,14 +109,18 @@ class ImageDownloader:
             images.append([name, url, image_content_b64])
             time.sleep(RATE_LIMITING_DELAY)
             if len(images) >= MAX_IMAGES:
-                self.output_group.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q2, images, message_id= message_protocol.internal.new_message_id(),))
+                self.output_group.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q2, images, message_id=f"{message_id}.{batch_idx}",))
+                batch_idx += 1
                 images = []
-        self.output_group.send(message_protocol.internal.serialize_query_result(
-            client_id,
-            message_protocol.internal.Query.Q2,
-            images,
-            message_id= message_protocol.internal.new_message_id(),
-        ))
+        if images:
+            self.output_group.send(
+                message_protocol.internal.serialize_query_result(
+                    client_id,
+                    message_protocol.internal.Query.Q2,
+                    images,
+                    message_id=f"{message_id}.{batch_idx}",
+                )
+            )
 
     def consume_message(self, message, ack, nack):
         """

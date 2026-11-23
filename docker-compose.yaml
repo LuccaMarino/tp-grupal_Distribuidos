@@ -355,6 +355,8 @@ services:
       context: ./src/
       dockerfile: q4_joiner/Dockerfile
     container_name: q4_joiner_0
+    volumes:
+      - q4_joiner_0_data:/data
     environment:
       ID: "0"
       MOM_HOST: "rabbitmq"
@@ -362,6 +364,7 @@ services:
       RESULTS_GROUP: "results_group"
       GATEWAY_AMOUNT: 1
       AGGREGATOR_AMOUNT: 2
+      STORAGE_PATH: "/data"
       PYTHONUNBUFFERED: "1"
     depends_on:
       rabbitmq:
@@ -376,6 +379,8 @@ services:
       context: ./src/
       dockerfile: word_counter/Dockerfile
     container_name: word_counter_0
+    volumes:
+      - word_counter_0_data:/data
     environment:
       ID: "0"
       MOM_HOST: "rabbitmq"
@@ -385,6 +390,7 @@ services:
       # EXPECTED_EOFS = PARSER_AMOUNT (3) * WORD_SUM_AMOUNT (3)
       EXPECTED_EOFS: 9
       SUM_PARTIAL_LENGTH: 100
+      STORAGE_PATH: "/data"
       PYTHONUNBUFFERED: "1"
     depends_on:
       rabbitmq:
@@ -399,6 +405,8 @@ services:
       context: ./src/
       dockerfile: word_counter/Dockerfile
     container_name: word_counter_1
+    volumes:
+      - word_counter_1_data:/data
     environment:
       ID: "1"
       MOM_HOST: "rabbitmq"
@@ -408,6 +416,7 @@ services:
       # EXPECTED_EOFS = PARSER_AMOUNT (3) * WORD_SUM_AMOUNT (3)
       SUM_PARTIAL_LENGTH: 100
       EXPECTED_EOFS: 9
+      STORAGE_PATH: "/data"
       PYTHONUNBUFFERED: "1"
     depends_on:
       rabbitmq:
@@ -422,6 +431,8 @@ services:
       context: ./src/
       dockerfile: word_counter/Dockerfile
     container_name: word_counter_2
+    volumes:
+      - word_counter_2_data:/data
     environment:
       ID: "2"
       MOM_HOST: "rabbitmq"
@@ -432,6 +443,7 @@ services:
       SUM_PARTIAL_LENGTH: 100
       EXPECTED_EOFS: 9
       PYTHONUNBUFFERED: "1"
+      STORAGE_PATH: "/data"
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -648,3 +660,7 @@ volumes:
   q3_aggregator_1_data:
   q4_aggregator_0_data:
   q4_aggregator_1_data:
+  word_counter_0_data:
+  word_counter_1_data:
+  word_counter_2_data:
+  q4_joiner_0_data:

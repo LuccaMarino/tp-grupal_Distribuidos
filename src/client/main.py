@@ -28,6 +28,7 @@ QUERY_OUTPUTS = {
     }
 
 PRINT_INTERVAL = 10000  # Print progress every 10000 articles sent
+NEXT_MESSAGE_ID = 1
 
 class Client:
 
@@ -47,6 +48,15 @@ class Client:
             self.output_files[query] = output_file
             self.csv_writers[query] = writer
         self.finished_queries = set()
+        self._next_message_id = NEXT_MESSAGE_ID
+
+    def _next_id(self):
+        """
+        Generates a new unique message ID for each message sent to the server.
+        """
+        message_id = self._next_message_id
+        self._next_message_id += NEXT_MESSAGE_ID
+        return message_id
 
     def _handle_sigterm(self, signum, frame):
         """
@@ -142,7 +152,7 @@ class Client:
             sent_count = 0
             for batch in parquet_file.iter_batches(batch_size=BATCH_SIZE):
                 article_list = batch.to_pylist()
-                message_id = message_protocol.internal.new_message_id()
+                message_id = self._next_id()
                 message_protocol.external.send_msg(
                     self.server_socket,
                     message_protocol.external.MsgType.WIKI_ARTICLE,
@@ -155,7 +165,7 @@ class Client:
         message_protocol.external.send_msg(
             self.server_socket,
             message_protocol.external.MsgType.END_OF_RECORDS,
-            message_protocol.internal.new_message_id()
+            self._next_id()
         )
         logging.info("All articles sent. Waiting for final acknowledgment...")
 
