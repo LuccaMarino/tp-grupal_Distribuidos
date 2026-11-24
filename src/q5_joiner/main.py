@@ -37,6 +37,9 @@ class Q5Joiner:
         os.makedirs(DATA_PATH, exist_ok=True)
         self._storage = ClientStateStorage(STORAGE_PATH, lambda: {"total_words": 0,"total_articles": 0,"word_sum_eofs": [],"word_counter_eofs": [],})
         self._storage.load(on_recover=self._on_recover)
+        with self._lock:
+            for client_id in self._storage.get_client_ids():
+                self._check_processing_completion(client_id)
         signal.signal(signal.SIGTERM, self._handle_sigterm)
 
     def _on_recover(self, client_id, state, eofs, pending_sends):
@@ -44,7 +47,20 @@ class Q5Joiner:
         state.setdefault("total_articles", 0)
         state.setdefault("word_sum_eofs", [])
         state.setdefault("word_counter_eofs", [])
-        logging.info("Recovered state for client %s: stats=%s/%s, eofs=%s",client_id,state["total_words"],state["total_articles"],eofs,)
+        finalization = state.setdefault("finalization", {})
+        finalization.setdefault("offset", 0)
+        finalization.setdefault("batch_index", 0)
+        finalization.setdefault("eof_sent", False)
+        finalization.setdefault("text_done", False)
+        logging.info(
+            "Recovered state for client %s: stats=%s/%s, eofs=%s, pending_sends=%d, finalization=%s",
+            client_id,
+            state["total_words"],
+            state["total_articles"],
+            eofs,
+            len(pending_sends),
+            finalization,
+        )
 
     def _handle_sigterm(self, signum, frame):
         """
@@ -115,6 +131,11 @@ class Q5Joiner:
         state.setdefault("total_articles", 0)
         state.setdefault("word_sum_eofs", [])
         state.setdefault("word_counter_eofs", [])
+        finalization = state.setdefault("finalization", {})
+        finalization.setdefault("offset", 0)
+        finalization.setdefault("batch_index", 0)
+        finalization.setdefault("eof_sent", False)
+        finalization.setdefault("text_done", False)
         return state
 
     def _check_processing_completion(self, client_id):
@@ -164,46 +185,97 @@ class Q5Joiner:
 
     def _finalize_query(self, client_id):
         """
-        Finalizes the query for a given client by computing the mean length of abstracts for old articles and sending the new articles (in batches) that exceed this mean to the gateway. It also sends an EOF message to indicate the end of results for this client and cleans up the state associated with the client.
+        Finalizes the query using one durable pending send at a time.
         """
         if self._storage.is_completed(client_id):
             return
-
         logging.info("Finalizing query for client %s", client_id)
-
         state = self._ensure_state(client_id)
         total_words = state["total_words"]
         total_articles = state["total_articles"]
         old_articles_average = (total_words / total_articles) if total_articles > 0 else 0.0
         file_path = self._client_file_path(client_id)
-        if os.path.exists(file_path):
-            with open(file_path, "r", encoding="utf-8") as f:
+        while True:
+            pending = self._storage.get_pending_sends(client_id)
+            if pending:
+                item = pending[0]
+                if item["type"] == "QUERY_RESULT":
+                    message = message_protocol.internal.serialize_query_result(client_id,message_protocol.internal.Query.Q5,item["records"],message_id=item["message_id"],)
+                    self._results_sender.send(message)
+                    self._storage.remove_pending_send(client_id)
+                    finalization = state["finalization"]
+                    finalization["offset"] = item["next_offset"]
+                    finalization["batch_index"] = item["batch_index"] + 1
+                    finalization["text_done"] = item["text_done"]
+                    self._storage.persist(client_id)
+                    continue
+                if item["type"] == "QUERY_EOF":
+                    message = message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q5, ID, message_id=item["message_id"],)
+                    self._results_sender.broadcast(message)
+                    self._storage.remove_pending_send(client_id)
+                    state["finalization"]["eof_sent"] = True
+                    self._storage.persist(client_id)
+                    continue
+                logging.error("Discarding unexpected pending send for client %s: %r", client_id, item)
+                self._storage.remove_pending_send(client_id)
+                self._storage.persist(client_id)
+                continue
+            finalization = state["finalization"]
+            if finalization["eof_sent"]:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                self._storage.mark_completed(client_id)
+                return
+            if not finalization["text_done"]:
+                if not os.path.exists(file_path):
+                    finalization["text_done"] = True
+                    self._storage.persist(client_id)
+                    continue
                 batch = []
-                batch_idx = 0
-                for line in f:
-                    fields = line.rstrip("\n").split("\t")
-                    if len(fields) == 3:
-                        _article_message_id, url, length_str = fields
-                    elif len(fields) == 2:
-                        url, length_str = fields
-                    else:
-                        logging.error("Discarding malformed article record for client %s: %r", client_id, line)
-                        continue
-                    length = int(length_str)
-                    if length > old_articles_average:
-                        batch.append([url, length])
-                        if len(batch) >= BATCH_SIZE:
-                            result_message = message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q5, batch, message_id=f"q5_join_{ID}.{batch_idx}")
-                            self._results_sender.send(result_message)
-                            batch = []
-                            batch_idx += 1
+                next_offset = finalization["offset"]
+                text_done = False
+                with open(file_path, "rb") as f:
+                    f.seek(finalization["offset"])
+                    while True:
+                        raw_line = f.readline()
+                        if not raw_line:
+                            text_done = True
+                            next_offset = f.tell()
+                            break
+                        next_offset = f.tell()
+                        try:
+                            line = raw_line.decode("utf-8").rstrip("\r\n")
+                        except UnicodeDecodeError:
+                            logging.error("Discarding malformed UTF-8 article record for client %s at offset %d", client_id, next_offset)
+                            continue
+                        fields = line.split("\t")
+                        if len(fields) == 3:
+                            _article_message_id, url, length_str = fields
+                        elif len(fields) == 2:
+                            url, length_str = fields
+                        else:
+                            logging.error("Discarding malformed article record for client %s: %r", client_id, line)
+                            continue
+                        try:
+                            length = int(length_str)
+                        except ValueError:
+                            logging.error("Discarding malformed article length for client %s: %r", client_id, length_str)
+                            continue
+                        if length > old_articles_average:
+                            batch.append([url, length])
+                            if len(batch) >= BATCH_SIZE:
+                                break
                 if batch:
-                    result_message = message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q5, batch, message_id=f"q5_join_{ID}.{batch_idx}")
-                    self._results_sender.send(result_message)
-            os.remove(file_path)
-        eof_message = message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q5, ID, message_id=f"q5_join_{ID}.eof")
-        self._results_sender.broadcast(eof_message)
-        self._storage.mark_completed(client_id)
+                    batch_index = finalization["batch_index"]
+                    self._storage.enqueue_sends(client_id, [{"type": "QUERY_RESULT","message_id": f"q5_join_{ID}.{batch_index}","batch_index": batch_index,"records": batch,"next_offset": next_offset,"text_done": text_done,}])
+                    self._storage.persist(client_id)
+                    continue
+                finalization["offset"] = next_offset
+                finalization["text_done"] = text_done
+                self._storage.persist(client_id)
+                continue
+            self._storage.enqueue_sends(client_id, [{"type": "QUERY_EOF","message_id": f"q5_join_{ID}.eof",}])
+            self._storage.persist(client_id)
 
     def _process_new_articles_message(self, message, ack, nack):
         """
@@ -249,14 +321,8 @@ class Q5Joiner:
         """
         Starts the Q5Joiner service by creating and starting two threads for consuming messages from the new articles and sum partial length group members. It waits for both threads to finish and ensures proper cleanup by closing the connections.
         """
-        t1 = threading.Thread(
-            target=self._new_articles.start_consuming,
-            args=(self._process_new_articles_message,)
-        )
-        t2 = threading.Thread(
-            target=self._sum_partial_length.start_consuming,
-            args=(self._process_sum_partial_length_message,)
-        )
+        t1 = threading.Thread(target=self._new_articles.start_consuming, args=(self._process_new_articles_message,))
+        t2 = threading.Thread( target=self._sum_partial_length.start_consuming, args=(self._process_sum_partial_length_message,))
 
         t1.start()
         t2.start()
