@@ -146,6 +146,9 @@ class ClientStateStorage:
     def get_state(self, client_id: str) -> dict:
         return self.ensure(client_id)
 
+    def get_client_ids(self) -> list[str]:
+        return list(self._states.keys())
+
     def get_eofs(self, client_id: str) -> set[str]:
         self.ensure(client_id)
         return self._eofs[client_id]
@@ -171,6 +174,14 @@ class ClientStateStorage:
     def enqueue_sends(self, client_id: str, items: list[dict]) -> None:
         self.ensure(client_id)
         self._pending_sends[client_id].extend(items)
+
+    def get_pending_sends(self, client_id: str) -> list[dict]:
+        self.ensure(client_id)
+        return self._pending_sends[client_id]
+
+    def remove_pending_send(self, client_id: str) -> dict:
+        self.ensure(client_id)
+        return self._pending_sends[client_id].pop(0)
 
     def persist(self, client_id: str) -> None:
         self.ensure(client_id)
