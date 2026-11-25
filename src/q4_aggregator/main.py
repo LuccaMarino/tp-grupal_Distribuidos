@@ -1,12 +1,14 @@
 import logging
 import os
 import signal
+import shutil
 
 from common import message_protocol
 from common.bucket_storage import BucketStorage
 from common.heartbeat import HeartbeatResponder
 from common.middleware import GroupMember, GroupSender
 from common.middleware.middleware import MessageMiddlewareCloseError
+from common.state_storage import ClientStateStorage
 
 ID = int(os.environ["ID"])
 MOM_HOST = os.environ["MOM_HOST"]
@@ -17,13 +19,22 @@ WORD_SUM_AMOUNT = int(os.environ["WORD_SUM_AMOUNT"])
 STORAGE_PATH = os.environ["STORAGE_PATH"]
 BUCKET_AMOUNT = int(os.environ["BUCKET_AMOUNT"])
 
-# Quantity of words to accumulate in memory before flushing to disk. This is a tradeoff between memory usage and disk I/O.
+# Quantity of words to accumulate in memory before flushing to disk. 
+# This is a tradeoff between memory usage and disk I/O.
 FLUSH_WORDS = int(os.environ["FLUSH_WORDS"])
+
+# Maximum number of messages processed without ack. A checkpoint is made 
+# when it is reached, and it is also used as the prefetch count, so 
+# RabbitMQ never stops delivering before a checkpoint.
+CHECKPOINT_MESSAGES = int(os.environ["CHECKPOINT_MESSAGES"])
 
 JOINER_AMOUNT = 1
 TOP_SIZE = 20
 
 EXPECTED_EOFS = PARSER_AMOUNT * WORD_SUM_AMOUNT
+
+RESULT_SEND = "QUERY_RESULT"
+EOF_SEND = "EOF"
 
 def _top_order(word_total):
     """
@@ -38,19 +49,30 @@ def _add_totals(stored_values, new_values):
     """
     return [stored_values[0] + new_values[0]]
 
+def _new_client_state():
+    """
+    Returns the initial persisted state of a client. The generations of its buckets are None until the first checkpoint, which means that no bucket has a file yet.
+    """
+    return {"generations": None}
+
 class Q4Aggregator:
     """
     Aggregator for the Q4 query. It receives messages from the word sum nodes, accumulates the totals in memory, and flushes them to disk when the buffer reaches a certain size. When it receives all EOFs for a client, it computes the partial top 20 words and sends them to the joiner.
+    Messages are acked only after a checkpoint, which flushes the buffers to disk and persists the state of each client (the bucket generations, the processed message ids and the received EOFs) in a single atomic write. If the node crashes, RabbitMQ redelivers the messages without ack, and the ones already included in a checkpoint are discarded as duplicates.
     """
     def __init__(self):
         """
-        Initializes the Q4Aggregator by setting up the input group member, the sender to the joiner, buffers, storages, and EOF tracking for each client. It also sets up a signal handler for SIGTERM to allow graceful shutdown.
+        Initializes the Q4Aggregator by setting up the input group member, the sender to the joiner, buffers, storages, and the persisted state of each client. It recovers the clients stored on disk, resends their pending results and sets up a signal handler for SIGTERM to allow graceful shutdown.
         """
-        self._input = GroupMember(MOM_HOST, INPUT_GROUP, ID)
+        self._input = GroupMember(MOM_HOST, INPUT_GROUP, ID, prefetch_count=CHECKPOINT_MESSAGES)
         self._joiner = GroupSender(MOM_HOST, JOINER_GROUP, JOINER_AMOUNT)
         self._buffers_by_client = {}   # client_id -> {word: [total]} with the totals accumulated in memory
         self._storages_by_client = {}  # client_id -> BucketStorage with the totals stored on disk
-        self._eofs_by_client = {}      # client_id -> set with the sender_id of the received EOFs
+        self._dirty_clients = set()    # client_id of the clients with changes since the last checkpoint
+        self._pending_acks = []        # ack functions of the messages processed since the last checkpoint
+        self._store = ClientStateStorage(STORAGE_PATH, _new_client_state)
+        self._store.load(on_recover=self._on_recover, send_fn=self._dispatch_send)
+        self._remove_completed_clients()
         signal.signal(signal.SIGTERM, self._handle_sigterm)
 
     def _handle_sigterm(self, signum, frame):
@@ -70,41 +92,100 @@ class Q4Aggregator:
             except MessageMiddlewareCloseError as e:
                 logging.error(e)
 
-    def _process_data(self, client_id, records):
+    def _on_recover(self, client_id, state, eofs, pending_sends):
         """
-        Processes incoming data messages by accumulating word totals in the buffer for the specified client. If the buffer reaches the defined threshold (FLUSH_WORDS), it flushes the buffer to disk using the associated BucketStorage instance.
+        Restores the bucket storage of a client recovered from disk, using the bucket generations of its last checkpoint.
         """
+        logging.info(f"Recovered client {client_id}: {len(eofs)} EOFs received, {len(pending_sends)} pending sends")
+        self._storages_by_client[client_id] = BucketStorage(STORAGE_PATH, client_id, BUCKET_AMOUNT, state["generations"])
+
+    def _remove_completed_clients(self):
+        """
+        Deletes the bucket storages of the clients that are already completed: the ones finished while resending pending results on recovery, and the directories left on disk by a crash right after a client was completed.
+        """
+        for client_id in list(self._storages_by_client):
+            if self._store.is_completed(client_id):
+                self._storages_by_client.pop(client_id).delete()
+        for filename in os.listdir(STORAGE_PATH):
+            path = os.path.join(STORAGE_PATH, filename)
+            if os.path.isdir(path) and self._store.is_completed(filename):
+                shutil.rmtree(path, ignore_errors=True)
+
+    def _dispatch_send(self, client_id, item):
+        """
+        Sends a pending item to the joiner: the partial top 20 words or the EOF. Returns True when the EOF is sent, which tells the state storage that the client is completed.
+        """
+        if item["type"] == RESULT_SEND:
+            self._joiner.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q4, item["records"], message_id=item["message_id"]))
+            return False
+        self._joiner.send(message_protocol.internal.serialize_eof(client_id, ID, message_id=item["message_id"]))
+        return True
+
+    def _get_storage(self, client_id):
+        """
+        Returns the bucket storage of the specified client, creating it if the client has none yet.
+        """
+        if client_id not in self._storages_by_client:
+            self._storages_by_client[client_id] = BucketStorage(STORAGE_PATH, client_id, BUCKET_AMOUNT)
+        return self._storages_by_client[client_id]
+
+    def _process_data(self, client_id, message_id, records, ack):
+        """
+        Processes incoming data messages by accumulating word totals in the buffer for the specified client. Duplicated messages and messages of completed clients are acked and discarded. The ack of the other messages is delayed until the next checkpoint, which is made when the buffer reaches FLUSH_WORDS words or CHECKPOINT_MESSAGES messages are waiting for ack.
+        """
+        if self._store.is_completed(client_id) or self._store.is_duplicate_msg(client_id, message_id):
+            ack()
+            return
+        self._store.mark_msg_seen(client_id, message_id)
         if client_id not in self._buffers_by_client:
             self._buffers_by_client[client_id] = {}
-            self._storages_by_client[client_id] = BucketStorage(STORAGE_PATH, client_id, BUCKET_AMOUNT)
         buffer = self._buffers_by_client[client_id]
         for word, total in records:
             if word not in buffer:
                 buffer[word] = [0]
             buffer[word][0] += total
-        if len(buffer) >= FLUSH_WORDS:
-            self._flush_buffer(client_id)
+        self._dirty_clients.add(client_id)
+        self._pending_acks.append(ack)
+        if len(buffer) >= FLUSH_WORDS or len(self._pending_acks) >= CHECKPOINT_MESSAGES:
+            self._checkpoint()
+
+    def _process_eof(self, client_id, message_id, sender_id, ack):
+        """
+        Processes incoming EOF messages by tracking the sender IDs for each client. Every new EOF triggers a checkpoint, so that the received EOFs are persisted. If all expected EOFs have been received for a client, it computes the top 20 words and sends them to the joiner.
+        """
+        if self._store.is_completed(client_id) or self._store.is_duplicate_eof(client_id, sender_id):
+            ack()
+            return
+        eof_count = self._store.add_eof(client_id, message_id, sender_id)
+        self._dirty_clients.add(client_id)
+        self._pending_acks.append(ack)
+        if eof_count == EXPECTED_EOFS:
+            self._flush_client(client_id)
+        else:
+            self._checkpoint()
 
     def _flush_buffer(self, client_id):
         """
-        Flushes the buffer for the specified client by merging the accumulated word totals in memory with the totals stored on disk. After merging, it clears the buffer to free up memory.
+        Flushes the buffer for the specified client by merging the accumulated word totals in memory with the totals stored on disk, and records the new bucket generations in the client's state. After merging, it clears the buffer to free up memory.
         """
-        buffer = self._buffers_by_client[client_id]
-        if len(buffer) == 0:
-            return
-        self._storages_by_client[client_id].merge(buffer, _add_totals)
-        self._buffers_by_client[client_id] = {}
+        storage = self._get_storage(client_id)
+        buffer = self._buffers_by_client.pop(client_id, {})
+        if len(buffer) > 0:
+            storage.merge(buffer, _add_totals)
+        self._store.get_state(client_id)["generations"] = storage.generations()
 
-    def _process_eof(self, client_id, sender_id):
+    def _checkpoint(self):
         """
-        Processes incoming EOF messages by tracking the sender IDs for each client. If all expected EOFs have been received for a client, it triggers the flush operation to compute and send the top 20 words to the joiner.
+        Flushes the buffers of the clients with changes, persists their state, deletes the replaced bucket files and acks all the messages processed since the last checkpoint.
         """
-        if client_id not in self._eofs_by_client:
-            self._eofs_by_client[client_id] = set()
-        eofs = self._eofs_by_client[client_id]
-        eofs.add(sender_id)
-        if len(eofs) == EXPECTED_EOFS:
-            self._flush_client(client_id)
+        for client_id in self._dirty_clients:
+            self._flush_buffer(client_id)
+            self._store.persist(client_id)
+            self._storages_by_client[client_id].remove_stale()
+        self._dirty_clients = set()
+        for ack in self._pending_acks:
+            ack()
+        self._pending_acks = []
 
     def _top_words(self, storage):
         """
@@ -121,38 +202,36 @@ class Q4Aggregator:
 
     def _flush_client(self, client_id):
         """
-        Flushes the remaining buffer for the specified client, computes the top 20 words from the stored data, and sends the results along with an EOF message to the joiner. After sending, it cleans up by deleting the storage files for that client.
+        Flushes the remaining buffer for the specified client, computes the top 20 words from the stored data and enqueues them along with an EOF message as pending sends. After a checkpoint, it sends them to the joiner and deletes the storage files for that client.
         """
-        self._eofs_by_client.pop(client_id)
-        top = []
-        storage = None
-        if client_id in self._buffers_by_client:
-            self._flush_buffer(client_id)
-            self._buffers_by_client.pop(client_id)
-            storage = self._storages_by_client.pop(client_id)
-            top = self._top_words(storage)
-        self._joiner.send(message_protocol.internal.serialize_query_result(client_id, message_protocol.internal.Query.Q4, top, message_id=f"q4_agg_{ID}.0"))
-        self._joiner.send(message_protocol.internal.serialize_eof(client_id, ID, message_id=f"q4_agg_{ID}.eof"))
-        if storage is not None:
-            storage.delete()
+        self._flush_buffer(client_id)
+        top = self._top_words(self._storages_by_client[client_id])
+        self._store.enqueue_sends(client_id, [
+            {"type": RESULT_SEND, "message_id": f"q4_agg_{ID}.0", "records": top},
+            {"type": EOF_SEND, "message_id": f"q4_agg_{ID}.eof"},
+        ])
+        self._checkpoint()
+        self._store.flush_pending(client_id, self._dispatch_send)
+        self._storages_by_client.pop(client_id).delete()
         logging.info(f"Client {client_id} finished: sent top {len(top)}")
 
     def _process_message(self, message, ack, nack):
         """
-        Processes incoming messages by deserializing them and determining their type. Depending on the message type (DATA or EOF), it calls the appropriate processing method.
+        Processes incoming messages by deserializing them and determining their type. Depending on the message type (DATA or EOF), it calls the appropriate processing method, which is responsible for acking the message.
         """
         try:
-            msg_type, client_id, _message_id, args = message_protocol.internal.deserialize(message)
+            msg_type, client_id, message_id, args = message_protocol.internal.deserialize(message)
             if msg_type == message_protocol.internal.MsgType.DATA:
-                self._process_data(client_id, *args)
+                self._process_data(client_id, message_id, *args, ack)
             elif msg_type == message_protocol.internal.MsgType.EOF:
-                self._process_eof(client_id, *args)
+                self._process_eof(client_id, message_id, *args, ack)
             else:
                 logging.error(f"Discarding message with unexpected type {msg_type}")
+                ack()
         except (ValueError, TypeError, AttributeError) as e:
             logging.error(f"Discarding malformed message: {e!r}")
-        ack()
-
+            ack()
+        
     def start(self):
         try:
             self._input.start_consuming(self._process_message)
