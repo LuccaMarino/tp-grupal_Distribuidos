@@ -461,6 +461,7 @@ services:
     container_name: q5_joiner_0
     volumes:
     - q5_joiner_new_articles:/new_articles
+    - q5_joiner_0_data:/data
     environment:
       ID: "0"
       MOM_HOST: "rabbitmq"
@@ -470,7 +471,8 @@ services:
       EXPECTED_WORDSUM_EOFS: 9 # PARSER_AMOUNT (3) * WORD_SUM_AMOUNT (3)
       EXPECTED_WORDCOUNTER_EOFS: 3 # WORD_COUNTER_AMOUNT (3)
       GATEWAY_AMOUNT: 1
-      STORAGE_PATH: "/new_articles"
+      STORAGE_PATH: "/data"
+      DATA_PATH: "/new_articles"
       BATCH_SIZE: 100
       PYTHONUNBUFFERED: "1"
     depends_on:
@@ -658,6 +660,7 @@ services:
 
 volumes:
   q5_joiner_new_articles:
+  q5_joiner_0_data:
   q3_aggregator_0_data:
   q3_aggregator_1_data:
   q4_aggregator_0_data:
