@@ -211,7 +211,7 @@ class Q3Aggregator:
             self._store.persist(client_id)
             self._storages_by_client[client_id].remove_stale()
         for client_id in self._dirty_clients:
-            # se flushean los pending aca porque q3 tiene lotes que enviar en todos los checkpoints
+            # se flushean los pending aca porque q3 envia lotes en cada checkpoint, no solo al final
             self._store.flush_pending(client_id, self._dispatch_send)
         self._dirty_clients = set()
         for ack in self._pending_acks:
@@ -220,36 +220,31 @@ class Q3Aggregator:
     
     def _flush_client(self, client_id):
         """
-        Flushes the remaining data for a client by flushing the buffer, sending any remaining shared words to the results group, and deleting the stored language flags on disk. It also sends an EOF message to the results group indicating that the Q3Aggregator has finished processing for the client.
+        Flushes the remaining buffer for a client, enqueues the remaining shared words followed by an EOF message as pending sends, and makes a checkpoint, which sends them to the results group and marks the client as completed. Then it deletes the stored language flags on disk.
         """
-        self._eofs_by_client.pop(client_id)
-        storage = None
-        if client_id in self._buffers_by_client:
-            self._flush_buffer(client_id)
-            self._buffers_by_client.pop(client_id)
-            self._messages_since_flush_by_client.pop(client_id)
-            storage = self._storages_by_client.pop(client_id)
-        shared_amount = self._shared_amount_by_client.pop(client_id, 0)
-        self._results.send(message_protocol.internal.serialize_query_eof(client_id, message_protocol.internal.Query.Q3, ID, message_id=f"q3_agg_{ID}.eof"))
-        if storage is not None:
-            storage.delete()
-        logging.info(f"Client {client_id} finished: sent {shared_amount} shared words")
-
+        self._flush_buffer(client_id)
+        self._store.enqueue_sends(client_id, [{"type": EOF_SEND, "message_id": f"q3_agg_{ID}.eof"}])
+        shared_batches = self._store.get_state(client_id)["out_seq"]
+        self._checkpoint()
+        self._storages_by_client.pop(client_id).delete()
+        logging.info(f"Client {client_id} finished: sent {shared_batches} batches of shared words")
+        
     def _process_message(self, message, ack, nack):
         """
-        Processes a message received from the input group. It deserializes the message, determines its type (DATA or EOF), and calls the appropriate processing method.
+        Processes a message received from the input group. It deserializes the message, determines its type (DATA or EOF), and calls the appropriate processing method, which is responsible for acking the message.
         """
         try:
-            msg_type, client_id, _message_id, args = message_protocol.internal.deserialize(message)
+            msg_type, client_id, message_id, args = message_protocol.internal.deserialize(message)
             if msg_type == message_protocol.internal.MsgType.DATA:
-                self._process_data(client_id, *args)
+                self._process_data(client_id, message_id, *args, ack)
             elif msg_type == message_protocol.internal.MsgType.EOF:
-                self._process_eof(client_id, *args)
+                self._process_eof(client_id, message_id, *args, ack)
             else:
                 logging.error(f"Discarding message with unexpected type {msg_type}")
+                ack()
         except (ValueError, TypeError, AttributeError) as e:
             logging.error(f"Discarding malformed message: {e!r}")
-        ack()
+            ack()
 
     def start(self):
         try:
