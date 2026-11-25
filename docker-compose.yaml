@@ -316,7 +316,7 @@ services:
       STORAGE_PATH: "/data"
       BUCKET_AMOUNT: 32
       FLUSH_WORDS: 50000
-      CHECKPOINT_MESSAGES: 100
+      CHECKPOINT_MESSAGES: 1000
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -343,7 +343,7 @@ services:
       STORAGE_PATH: "/data"
       BUCKET_AMOUNT: 32
       FLUSH_WORDS: 50000
-      CHECKPOINT_MESSAGES: 100
+      CHECKPOINT_MESSAGES: 1000
     depends_on:
       rabbitmq:
         condition: service_healthy
