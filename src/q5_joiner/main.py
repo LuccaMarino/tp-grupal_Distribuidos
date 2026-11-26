@@ -35,7 +35,7 @@ class Q5Joiner:
         self._lock = threading.Lock()
         os.makedirs(STORAGE_PATH, exist_ok=True)
         os.makedirs(DATA_PATH, exist_ok=True)
-        self._storage = ClientStateStorage(STORAGE_PATH, lambda: {"total_words": 0,"total_articles": 0,"word_sum_eofs": [],"word_counter_eofs": [],})
+        self._storage = ClientStateStorage(STORAGE_PATH, lambda: {"total_words": 0,"total_articles": 0,"word_sum_eofs": [],"word_counter_eofs": [],"aof_size": 0})
         self._storage.load(on_recover=self._on_recover)
         with self._lock:
             for client_id in self._storage.get_client_ids():
@@ -47,20 +47,13 @@ class Q5Joiner:
         state.setdefault("total_articles", 0)
         state.setdefault("word_sum_eofs", [])
         state.setdefault("word_counter_eofs", [])
+        state.setdefault("aof_size", 0)
         finalization = state.setdefault("finalization", {})
         finalization.setdefault("offset", 0)
         finalization.setdefault("batch_index", 0)
         finalization.setdefault("eof_sent", False)
         finalization.setdefault("text_done", False)
-        logging.info(
-            "Recovered state for client %s: stats=%s/%s, eofs=%s, pending_sends=%d, finalization=%s",
-            client_id,
-            state["total_words"],
-            state["total_articles"],
-            eofs,
-            len(pending_sends),
-            finalization,
-        )
+        os.truncate(self._client_file_path(client_id), state["aof_size"])
 
     def _handle_sigterm(self, signum, frame):
         """
@@ -98,12 +91,19 @@ class Q5Joiner:
                 return
 
             file_path = self._client_file_path(client_id)
-            with open(file_path, "a", encoding="utf-8") as f:
-                for record in records:
-                    url, length = record
-                    f.write(f"{message_id}\t{url}\t{length}\n")
-                f.flush()
-
+            # with open(file_path, "a", encoding="utf-8") as f:
+                # for record in records:
+                #     url, length = record
+                #     f.write(f"{message_id}\t{url}\t{length}\n")
+                #f.flush()
+            payload = "".join(f"{message_id}\t{url}\t{length}\n" for url, length in records)
+            if payload:
+                with open(file_path, "a", encoding="utf-8") as f:
+                    f.write(payload)
+                    f.flush()
+                    os.fsync(f.fileno())
+                    file_size = f.tell()
+                    self._storage._states[client_id]["aof_size"] = file_size
             self._storage.mark_msg_seen(client_id, message_id)
             self._storage.persist(client_id)
 
@@ -131,6 +131,7 @@ class Q5Joiner:
         state.setdefault("total_articles", 0)
         state.setdefault("word_sum_eofs", [])
         state.setdefault("word_counter_eofs", [])
+        state.setdefault("aof_size", 0)
         finalization = state.setdefault("finalization", {})
         finalization.setdefault("offset", 0)
         finalization.setdefault("batch_index", 0)
