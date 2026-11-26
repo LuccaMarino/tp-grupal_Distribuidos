@@ -104,13 +104,35 @@ def delete_condition_ready(client_id, ended_querys):
             return False
     return True
 
+def is_new_result(seen_results, client_id, query, message_id):
+    """
+    Records the message_id of a query result for a given client. Returns False if that message_id was already received for the same query, which happens when a node resends a result after recovering from a crash.
+    """
+    if client_id not in seen_results:
+        seen_results[client_id] = {}
+    if query not in seen_results[client_id]:
+        seen_results[client_id][query] = set()
+    if message_id in seen_results[client_id][query]:
+        return False
+    seen_results[client_id][query].add(message_id)
+    return True
 
-def handle_query_eof(outgoing, ended_querys, client_id, query, sender_id):
+def forget_query_results(seen_results, client_id, query):
+    """
+    Deletes the message_ids received for a query of a client once the query has ended.
+    """
+    if client_id in seen_results:
+        seen_results[client_id].pop(query, None)
+        if len(seen_results[client_id]) == 0:
+            del seen_results[client_id]
+
+def handle_query_eof(outgoing, ended_querys, seen_results, client_id, query, sender_id):
     """
     Handles the end of a query for a specific client.
     """
     if query not in EXPECTED_QUERY_EOFS:
         outgoing.put((message_protocol.external.MsgType.END_OF_QUERY_RESULTS, query))
+        forget_query_results(seen_results, client_id, query)
         return
     if client_id not in ended_querys:
         ended_querys[client_id] = {}
@@ -119,9 +141,9 @@ def handle_query_eof(outgoing, ended_querys, client_id, query, sender_id):
     ended_querys[client_id][query].add(sender_id)
     if len(ended_querys[client_id][query]) == EXPECTED_QUERY_EOFS[query]:
         outgoing.put((message_protocol.external.MsgType.END_OF_QUERY_RESULTS, query))
+        forget_query_results(seen_results, client_id, query)
         if delete_condition_ready(client_id, ended_querys):
             del ended_querys[client_id]
-
 
 def handle_client_response(client_list, client_lock, consumer_controller):
     """
@@ -129,6 +151,7 @@ def handle_client_response(client_list, client_lock, consumer_controller):
     """
     input_group = GroupMember(MOM_HOST, INPUT_GROUP, GATEWAY_ID)
     ended_querys = {}
+    seen_results = {}   # client_id -> {query: set de message_id} de los resultados ya enviados al cliente
     def _consume_result(message, ack, nack):
         client_index = 0
         try:
@@ -138,13 +161,16 @@ def handle_client_response(client_list, client_lock, consumer_controller):
                     if not deserialized_message:
                         client_index += 1
                         continue
-                    type_message, client_id, _message_id, fields = deserialized_message
+                    type_message, client_id, message_id, fields = deserialized_message
                     if type_message == message_protocol.internal.MsgType.QUERY_EOF:
                         query, sender_id = fields
-                        handle_query_eof(connection.outgoing, ended_querys, client_id, query, sender_id)
+                        handle_query_eof(connection.outgoing, ended_querys, seen_results, client_id, query, sender_id)
                     else:
                         query, records = fields
-                        connection.outgoing.put(( message_protocol.external.MsgType.QUERY_RESULT, (query, records),))
+                        if is_new_result(seen_results, client_id, query, message_id):
+                            connection.outgoing.put(( message_protocol.external.MsgType.QUERY_RESULT, (query, records),))
+                        else:
+                            logging.info(f"Discarding duplicate result {message_id} of query {query} for client {client_id}")
                     break
             ack()
         except socket.error:
