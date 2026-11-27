@@ -14,6 +14,7 @@ ELECTION_TIMEOUT = 1.0
 DEFAULT_HOST = "0.0.0.0"
 MAX_WORKERS = 4
 JOIN_TIMEOUT = 1.0
+
 class BullyElection:
     """
     Implements the Bully election algorithm for leader election among distributed monitors.
@@ -40,10 +41,16 @@ class BullyElection:
         self._socket.settimeout(0.5)
 
     def is_leader(self) -> bool:
+        """
+        Returns True if the current monitor is the active leader, False otherwise.
+        """
         with self._lock:
             return self._leader_id == self.id
 
     def start(self):
+        """
+        Starts the Bully election algorithm by launching listener and heartbeat threads. One of the threads will trigger an election if no leader is present or if the current leader fails to send heartbeats. The other thread will listen for incoming messages from other monitors and handle them accordingly.
+        """
         self._threads = [
             threading.Thread(target=self._listen_loop, name="bully-listener", daemon=True),
             threading.Thread(target=self._heartbeat_loop, name="bully-heartbeat", daemon=True),
@@ -63,17 +70,25 @@ class BullyElection:
             t.join(timeout=JOIN_TIMEOUT)
 
     def _trigger_election(self):
+        """
+        Triggers a new election if one is not already in progress. This method is called when the current monitor detects that the leader has failed or when it receives a COORDINATOR message from a lower-ID monitor.
+        """
         if self._stop_event.is_set():
             return
         with self._lock:
             if self._election_in_progress:
                 return
+            self._election_in_progress = True
         try:
-            self._executor.submit(self.start_election)
+            self._executor.submit(self._run_election)
         except RuntimeError:
-            pass
+            with self._lock:
+                self._election_in_progress = False
 
     def _send(self, target_host: str, msg_type: BullyMessageType):
+        """
+        Sends a message of the specified type to the target monitor asynchronously. If the current monitor is stopping, it does not send any messages.
+        """
         if self._stop_event.is_set():
             return
 
@@ -93,6 +108,9 @@ class BullyElection:
             pass
 
     def _broadcast_coordinator(self):
+        """
+        Broadcasts a COORDINATOR message to all peers, indicating that the current monitor is the new leader. This method is called when the current monitor wins an election or when it detects that no higher-ID monitors are alive.
+        """
         with self._lock:
             self._leader_id = self.id
             self._last_leader_heartbeat = time.monotonic()
@@ -102,13 +120,15 @@ class BullyElection:
             if peer_id != self.id:
                 self._send(peer_host, BullyMessageType.COORDINATOR)
 
-    def start_election(self):
+    def _run_election(self):
+        """
+        Runs the election process according to the Bully algorithm. It sends ELECTION messages to all higher-ID monitors and waits for ALIVE responses. If no ALIVE responses are received within the timeout, it declares itself the leader and broadcasts a COORDINATOR message. If an ALIVE response is received, it waits for a COORDINATOR message from the new leader.
+        """
         if self._stop_event.is_set():
+            with self._lock:
+                self._election_in_progress = False
             return
         with self._lock:
-            if self._election_in_progress:
-                return
-            self._election_in_progress = True
             self._got_alive = False
 
         logging.info("Monitor %d starting election...", self.id)
@@ -120,13 +140,18 @@ class BullyElection:
         for host in higher_peers:
             self._send(host, BullyMessageType.ELECTION)
         if self._stop_event.wait(ELECTION_TIMEOUT):
+            with self._lock:
+                self._election_in_progress = False
             return
         with self._lock:
             received_alive = self._got_alive
         if not received_alive:
             self._broadcast_coordinator()
         else:
-            if self._stop_event.wait(ELECTION_TIMEOUT):
+            coordinator_wait = ELECTION_TIMEOUT * (len(higher_peers) + 1)
+            if self._stop_event.wait(coordinator_wait):
+                with self._lock:
+                    self._election_in_progress = False
                 return
             with self._lock:
                 self._election_in_progress = False
@@ -135,6 +160,16 @@ class BullyElection:
                 self._trigger_election()
 
     def _handle_election(self, sender_id: int):
+        """
+        Handles an incoming ELECTION message from another monitor. If the sender has a higher ID, it responds with an ALIVE message. If the sender has a lower ID, it responds with a COORDINATOR message if it is the leader, or triggers a new election if it is not.
+        """
+        if sender_id > self.id:
+            with self._lock:
+                if self._leader_id == self.id:
+                    self._leader_id = None
+                self._got_alive = True
+                self._last_leader_heartbeat = time.monotonic()
+            return
         if sender_id < self.id:
             sender_host = self.peers.get(sender_id)
             if sender_host:
@@ -146,19 +181,45 @@ class BullyElection:
                 self._trigger_election()
 
     def _handle_alive(self, _sender_id: int):
+        """
+        Handles an incoming ALIVE message from another monitor. This indicates that a higher-ID monitor is alive and will take over the election process. The current monitor will wait for a COORDINATOR message from the new leader.
+        """
         with self._lock:
             self._got_alive = True
 
     def _handle_coordinator(self, sender_id: int):
+        """
+        Handles an incoming COORDINATOR message from another monitor.
+        - If sender_id > self.id: recognizes the sender as the active leader and resets the heartbeat timer.
+        - If sender_id < self.id: reaffirms leadership if this node is the leader, ignores the stale message
+          if a higher-ID leader is already recognized, or triggers a new election if no valid leader is set
+          and no election is currently in progress.
+        """
         if sender_id < self.id:
-            logging.info(
-                "Monitor %d ignoring COORDINATOR from lower ID %d; starting election...",
-                self.id,
-                sender_id,
-            )
-            self._trigger_election()
+            with self._lock:
+                current_leader = self._leader_id
+                already_electing = self._election_in_progress
+            if current_leader == self.id:
+                sender_host = self.peers.get(sender_id)
+                if sender_host:
+                    self._send(sender_host, BullyMessageType.COORDINATOR)
+                return
+            if current_leader is not None and current_leader > self.id:
+                logging.debug(
+                    "Monitor %d ignoring stale COORDINATOR from %d (current leader is %d)",
+                    self.id,
+                    sender_id,
+                    current_leader,
+                )
+                return
+            if not already_electing:
+                logging.info(
+                    "Monitor %d ignoring COORDINATOR from lower ID %d; starting election...",
+                    self.id,
+                    sender_id,
+                )
+                self._trigger_election()
             return
-
         with self._lock:
             if self._leader_id != sender_id:
                 logging.info("Monitor %d recognized Monitor %d as leader", self.id, sender_id)
@@ -167,6 +228,9 @@ class BullyElection:
             self._election_in_progress = False
 
     def _listen_loop(self):
+        """
+        Main loop that listens for incoming UDP messages from other monitors. It handles ELECTION, ALIVE, and COORDINATOR messages according to the Bully algorithm. If the current monitor is stopping, it exits the loop.
+        """
         while not self._stop_event.is_set():
             try:
                 data, addr = self._socket.recvfrom(256)
@@ -189,6 +253,9 @@ class BullyElection:
                 logging.error(f"Error in listen loop: {e}")
 
     def _heartbeat_loop(self):
+        """
+        Main loop that sends periodic COORDINATOR messages if the current monitor is the leader. If the current monitor is not the leader, it checks for leader heartbeats and triggers an election if the leader is unresponsive. If the current monitor is stopping, it exits the loop.
+        """
         while not self._stop_event.is_set():
             with self._lock:
                 is_leader = self._leader_id == self.id

@@ -2,6 +2,8 @@ import logging
 import docker
 from docker.errors import NotFound, APIError
 
+RESTART_TIMEOUT = 1  # seconds
+
 class DockerClient:
     def __init__(self):
         self.client = docker.from_env()
@@ -21,7 +23,7 @@ class DockerClient:
         """
         try:
             container = self.client.containers.get(container_name)
-            container.start()
+            container.restart(timeout=RESTART_TIMEOUT)
             logging.info(f"Container '{container_name}' restarted successfully.")
         except NotFound:
             logging.error(f"Container '{container_name}' not found.")
